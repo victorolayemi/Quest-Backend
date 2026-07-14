@@ -1,0 +1,23 @@
+{
+  "name": "bible-app",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --ip 0.0.0.0",
+    "deploy": "wrangler deploy --minify",
+    "cf-typegen": "wrangler types --env-interface CloudflareBindings"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.13.0",
+    "firebase-admin": "^13.10.0",
+    "hono": "^4.12.21",
+    "jose": "^6.2.3"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240512.0",
+    "@prisma/adapter-d1": "^5.13.0",
+    "@types/node": "^25.9.0",
+    "prisma": "^5.13.0",
+    "typescript": "^5.4.5",
+    "wrangler": "^4.4.0"
+  }
+}

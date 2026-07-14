@@ -1,0 +1,1 @@
+ALTER TABLE "User" ADD COLUMN "autoScroll" BOOLEAN NOT NULL DEFAULT false;
