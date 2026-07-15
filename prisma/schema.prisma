@@ -20,6 +20,11 @@ model User {
   avatarUrl                   String?
   bio                         String?
   points                      Int                           @default(0)
+  devotionPoints              Int                           @default(0)
+  dailyBreadPoints            Int                           @default(0)
+  audioReelPoints             Int                           @default(0)
+  videoReelPoints             Int                           @default(0)
+  quizPoints                  Int                           @default(0)
   streakCount                 Int                           @default(0)
   isGuest                     Boolean                       @default(false)
   isAdmin                     Boolean                       @default(false)

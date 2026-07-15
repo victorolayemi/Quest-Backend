@@ -138,7 +138,8 @@ quizzes.post("/solo/:quizId/submit", async (c) => {
   await prisma.user.update({
     where: { id: userId },
     data: {
-      points: { increment: pointsEarned }
+      points: { increment: pointsEarned },
+      quizPoints: { increment: pointsEarned }
     }
   });
   return c.json({

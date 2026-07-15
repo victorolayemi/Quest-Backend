@@ -184,7 +184,7 @@ games.get("/overview", authMiddleware, async (c) => {
     return c.json({
       quiz: {
         level: quizLevel,
-        points: user.points || 0,
+        points: user.quizPoints || 0,
         progress: quizProgress
       },
       puzzle: {
@@ -192,12 +192,41 @@ games.get("/overview", authMiddleware, async (c) => {
         streak,
         nextMilestone: nextStreakMilestone,
         progress: streakProgress
-      }
+      },
+      devotion: {
+        points: user.devotionPoints || 0
+      },
+      dailyBread: {
+        points: user.dailyBreadPoints || 0
+      },
+      audioReel: {
+        points: user.audioReelPoints || 0
+      },
+      videoReel: {
+        points: user.videoReelPoints || 0
+      },
+      totalPoints: user.points || 0
     });
   } catch (error) {
     return c.json({ error: "Failed to fetch games overview" }, 500);
   }
 });
 
+games.post("/daily-bread/share", authMiddleware, async (c) => {
+  const prisma = getPrisma(c.env.DB);
+  const userId = c.get("userId");
+  try {
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        points: { increment: 10 },
+        dailyBreadPoints: { increment: 10 }
+      }
+    });
+    return c.json({ message: "Points awarded for sharing Daily Bread" });
+  } catch (error) {
+    return c.json({ error: "Failed to award points" }, 500);
+  }
+});
 
 export default games;

@@ -1,5 +1,5 @@
 -- AlterTable
-ALTER TABLE "Community" ADD COLUMN "isPrivate" BOOLEAN NOT NULL DEFAULT false;
+-- Duplicate removed: ALTER TABLE "Community" ADD COLUMN "isPrivate" BOOLEAN NOT NULL DEFAULT false;
 
 -- CreateTable
 CREATE TABLE "CommunityJoinRequest" (

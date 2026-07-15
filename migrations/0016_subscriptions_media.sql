@@ -23,4 +23,4 @@ CREATE TABLE "UserMedia" (
 );
 
 -- AlterTable
-ALTER TABLE "Community" ADD COLUMN "creatorId" TEXT;
+-- Duplicate removed: ALTER TABLE "Community" ADD COLUMN "creatorId" TEXT;

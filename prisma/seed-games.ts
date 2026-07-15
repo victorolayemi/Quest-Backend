@@ -125,25 +125,25 @@ async function main() {
       questionText: "Who built the ark?",
       options: JSON.stringify(["Moses", "Noah", "Abraham", "David"]),
       correctAnswerIndex: 1,
-      difficulty: "easy",
+      level: 1,
     },
     {
       questionText: "How many days and nights did it rain during the flood?",
       options: JSON.stringify(["10", "40", "100", "7"]),
       correctAnswerIndex: 1,
-      difficulty: "easy",
+      level: 1,
     },
     {
       questionText: "What was the first plague of Egypt?",
       options: JSON.stringify(["Frogs", "Locusts", "Water turned to blood", "Hail"]),
       correctAnswerIndex: 2,
-      difficulty: "medium",
+      level: 2,
     },
     {
       questionText: "Who was the oldest man in the Bible?",
       options: JSON.stringify(["Adam", "Noah", "Methuselah", "Enoch"]),
       correctAnswerIndex: 2,
-      difficulty: "hard",
+      level: 3,
     },
   ];
 

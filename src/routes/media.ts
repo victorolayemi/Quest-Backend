@@ -363,7 +363,10 @@ media.post("/videos/:id/playback", authMiddleware, async (c) => {
   if (completed && (!existing || !existing.completed)) {
     await prisma.user.update({
       where: { id: userId },
-      data: { points: { increment: 10 } }
+      data: { 
+        points: { increment: 20 },
+        videoReelPoints: { increment: 20 }
+      }
     });
   }
   return c.json(record);
@@ -529,7 +532,10 @@ media.post("/audio/:id/playback", authMiddleware, async (c) => {
   if (completed && (!existing || !existing.completed)) {
     await prisma.user.update({
       where: { id: userId },
-      data: { points: { increment: 10 } }
+      data: { 
+        points: { increment: 20 },
+        audioReelPoints: { increment: 20 }
+      }
     });
   }
   return c.json(record);

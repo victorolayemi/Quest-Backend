@@ -21,12 +21,12 @@ VALUES
   ('day-3', 'plan-1', 3, 'Faith in Action', 'Faith without works is dead. How will your actions reflect your trust in God today? Step out and love boldly.', 20, 0, '2026-01-01T00:00:00.000Z');
 
 -- Sermon Media
-INSERT INTO "SermonMedia" (id, title, author, likes, mediaUrl, imageUrl, type, duration, category, createdAt)
+INSERT INTO "SermonMedia" (id, title, author, mediaUrl, imageUrl, type, duration, category, createdAt)
 VALUES
-  ('media-1', 'Overcoming Anxiety', 'Pastor John MacArthur', 120, 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3', 'https://images.unsplash.com/photo-1518495973542-4542c06a5843?auto=format&fit=crop&w=300&q=80', 'AUDIO', '12:45', 'Sermon', '2026-01-01T00:00:00.000Z'),
-  ('media-2', 'The Grace of God', 'Alistair Begg', 85, 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3', 'https://images.unsplash.com/photo-1447752875215-b2761acb3c5d?auto=format&fit=crop&w=300&q=80', 'AUDIO', '18:12', 'Grace', '2026-01-01T00:00:00.000Z'),
-  ('media-3', 'The Power of Prayer', 'Timothy Keller', 203, 'https://sample-videos.com/video321/mp4/720/big_buck_bunny_720p_1mb.mp4', 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=300&q=80', 'VIDEO', '24:10', 'Prayer', '2026-01-02T00:00:00.000Z'),
-  ('media-4', 'Walking in the Spirit', 'Charles Stanley', 145, 'https://sample-videos.com/video321/mp4/720/big_buck_bunny_720p_2mb.mp4', 'https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?auto=format&fit=crop&w=300&q=80', 'VIDEO', '31:05', 'Holy Spirit', '2026-01-03T00:00:00.000Z');
+  ('media-1', 'Overcoming Anxiety', 'Pastor John MacArthur', 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3', 'https://images.unsplash.com/photo-1518495973542-4542c06a5843?auto=format&fit=crop&w=300&q=80', 'AUDIO', '12:45', 'Sermon', '2026-01-01T00:00:00.000Z'),
+  ('media-2', 'The Grace of God', 'Alistair Begg', 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3', 'https://images.unsplash.com/photo-1447752875215-b2761acb3c5d?auto=format&fit=crop&w=300&q=80', 'AUDIO', '18:12', 'Grace', '2026-01-01T00:00:00.000Z'),
+  ('media-3', 'The Power of Prayer', 'Timothy Keller', 'https://sample-videos.com/video321/mp4/720/big_buck_bunny_720p_1mb.mp4', 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=300&q=80', 'VIDEO', '24:10', 'Prayer', '2026-01-02T00:00:00.000Z'),
+  ('media-4', 'Walking in the Spirit', 'Charles Stanley', 'https://sample-videos.com/video321/mp4/720/big_buck_bunny_720p_2mb.mp4', 'https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?auto=format&fit=crop&w=300&q=80', 'VIDEO', '31:05', 'Holy Spirit', '2026-01-03T00:00:00.000Z');
 
 -- Quizzes
 INSERT INTO "Quiz" (id, title, category, difficulty, points, createdAt)

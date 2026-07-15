@@ -25,6 +25,15 @@ contentAdmin.delete("/devotions/plans/:id", async (c) => {
   await prisma.devotionPlan.delete({ where: { id: c.req.param("id") } });
   return c.json({ success: true });
 });
+contentAdmin.put("/devotions/plans/:id", async (c) => {
+  const prisma = getPrisma(c.env.DB);
+  const body = await c.req.json();
+  const plan = await prisma.devotionPlan.update({
+    where: { id: c.req.param("id") },
+    data: body
+  });
+  return c.json({ plan });
+});
 contentAdmin.get("/devotions/plans/:planId/days", async (c) => {
   const prisma = getPrisma(c.env.DB);
   const days = await prisma.devotionDay.findMany({
@@ -43,6 +52,40 @@ contentAdmin.delete("/devotions/days/:id", async (c) => {
   const prisma = getPrisma(c.env.DB);
   await prisma.devotionDay.delete({ where: { id: c.req.param("id") } });
   return c.json({ success: true });
+});
+contentAdmin.put("/devotions/days/:id", async (c) => {
+  const prisma = getPrisma(c.env.DB);
+  const body = await c.req.json();
+  const day2 = await prisma.devotionDay.update({
+    where: { id: c.req.param("id") },
+    data: body
+  });
+  return c.json({ day: day2 });
+});
+contentAdmin.post("/devotions/bulk-import", async (c) => {
+  const prisma = getPrisma(c.env.DB);
+  const body = await c.req.json();
+  const plansData = body.plans;
+
+  if (!Array.isArray(plansData)) {
+    return c.json({ error: "Invalid data format" }, 400);
+  }
+
+  const createdPlans = [];
+  for (const p of plansData) {
+    const { days, ...planData } = p;
+    const plan = await prisma.devotionPlan.create({
+      data: {
+        ...planData,
+        days: {
+          create: days
+        }
+      }
+    });
+    createdPlans.push(plan);
+  }
+
+  return c.json({ success: true, created: createdPlans.length });
 });
 contentAdmin.get("/daily-bread", async (c) => {
   const prisma = getPrisma(c.env.DB);

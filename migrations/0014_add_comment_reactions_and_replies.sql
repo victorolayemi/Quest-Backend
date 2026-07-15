@@ -1,4 +1,4 @@
-ALTER TABLE "Comment" ADD COLUMN "parentId" TEXT;
+-- Duplicate removed: ALTER TABLE "Comment" ADD COLUMN "parentId" TEXT;
 
 CREATE TABLE "CommentReaction" (
     "id" TEXT NOT NULL PRIMARY KEY,

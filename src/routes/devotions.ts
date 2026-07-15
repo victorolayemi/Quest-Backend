@@ -96,8 +96,11 @@ devotions.get("/my-plans", async (c) => {
     const diffMs = now.getTime() - started.getTime();
     const diffDays = Math.floor(diffMs / (1e3 * 60 * 60 * 24));
     let calculatedCurrentDay = diffDays + 1;
-    if (plan && calculatedCurrentDay > plan.durationDays) {
-      calculatedCurrentDay = plan.durationDays;
+    const actualDays = (plan?.days && plan.days.length > 0) 
+        ? plan.days.length 
+        : (plan?.durationDays ?? 1);
+    if (plan && calculatedCurrentDay > actualDays) {
+      calculatedCurrentDay = actualDays;
     }
     return {
       progressId: p.id,
@@ -108,7 +111,7 @@ devotions.get("/my-plans", async (c) => {
       reminderEnabled: p.reminderEnabled,
       plan
     };
-  });
+  }).filter((item: any) => item.plan != null);
   return c.json(formatted);
 });
 devotions.get("/plans/:planId/days/:dayNum", async (c) => {
@@ -119,7 +122,8 @@ devotions.get("/plans/:planId/days/:dayNum", async (c) => {
     where: { planId, dayNumber: Number(dayNum) }
   });
   const plan = await prisma.devotionPlan.findUnique({
-    where: { id: planId }
+    where: { id: planId },
+    include: { days: true }
   });
   if (!day2 || !plan) return c.json({ error: "Day content or plan not found" }, 404);
   const existingLike = await prisma.devotionDayLike.findUnique({
@@ -159,10 +163,16 @@ devotions.post("/plans/:planId/days/:dayNum/complete", async (c) => {
       completedAt
     }
   });
-  await prisma.user.update({
-    where: { id: userId },
-    data: { points: { increment: day2.pointsEarned } }
-  });
+  
+  if (dayNumber >= progress.currentDay) {
+    await prisma.user.update({
+      where: { id: userId },
+      data: { 
+        points: { increment: day2.pointsEarned },
+        devotionPoints: { increment: day2.pointsEarned }
+      }
+    });
+  }
   return c.json({
     message: "Day completed successfully",
     pointsEarned: day2.pointsEarned,
