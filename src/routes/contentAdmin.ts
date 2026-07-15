@@ -28,9 +28,11 @@ contentAdmin.delete("/devotions/plans/:id", async (c) => {
 contentAdmin.put("/devotions/plans/:id", async (c) => {
   const prisma = getPrisma(c.env.DB);
   const body = await c.req.json();
+  // Strip computed/readonly fields that Prisma rejects
+  const { _count, id, createdAt, days, ...data } = body;
   const plan = await prisma.devotionPlan.update({
     where: { id: c.req.param("id") },
-    data: body
+    data
   });
   return c.json({ plan });
 });
