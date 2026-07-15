@@ -177,6 +177,41 @@ communities.post("/", async (c) => {
     return c.json({ error: "Failed to create community" }, 500);
   }
 });
+
+communities.get("/messages/saved", async (c) => {
+  const userId = c.get("userId");
+  const prisma = getPrisma(c.env.DB);
+  
+  try {
+    const savedMessages = await prisma.communityMessageBookmark.findMany({
+      where: { userId },
+      include: {
+        message: {
+          include: {
+            sender: {
+              select: { id: true, username: true, fullName: true, avatarUrl: true }
+            }
+          }
+        }
+      },
+      orderBy: { createdAt: "desc" }
+    });
+    
+    const formatted = savedMessages.map((bm: any) => ({
+      id: bm.message.id,
+      title: bm.message.title,
+      text: bm.message.text,
+      createdAt: bm.message.createdAt,
+      likesCount: bm.message.likesCount,
+      sender: bm.message.sender
+    }));
+    
+    return c.json(formatted);
+  } catch (error) {
+    return c.json({ error: "Failed to fetch saved messages" }, 500);
+  }
+});
+
 communities.get("/:id", async (c) => {
   const id = c.req.param("id");
   const userId = c.get("userId");

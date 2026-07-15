@@ -1,210 +1,14 @@
-PRAGMA defer_foreign_keys=TRUE;
-CREATE TABLE d1_migrations(
-		id         INTEGER PRIMARY KEY AUTOINCREMENT,
-		name       TEXT UNIQUE,
-		applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
-);
-INSERT INTO "d1_migrations" ("id","name","applied_at") VALUES(1,'0001_init.sql','2026-06-04 15:40:36');
-INSERT INTO "d1_migrations" ("id","name","applied_at") VALUES(2,'0002_add_password.sql','2026-06-04 15:40:36');
-INSERT INTO "d1_migrations" ("id","name","applied_at") VALUES(3,'0003_admin_features.sql','2026-06-04 15:40:37');
-INSERT INTO "d1_migrations" ("id","name","applied_at") VALUES(4,'0004_add_login_history.sql','2026-06-04 15:40:38');
-INSERT INTO "d1_migrations" ("id","name","applied_at") VALUES(5,'0005_init_games.sql','2026-06-04 15:40:38');
-INSERT INTO "d1_migrations" ("id","name","applied_at") VALUES(6,'0006_init_bible_quiz.sql','2026-06-04 15:40:39');
-INSERT INTO "d1_migrations" ("id","name","applied_at") VALUES(7,'0007_add_fcm_token.sql','2026-06-04 15:40:40');
-INSERT INTO "d1_migrations" ("id","name","applied_at") VALUES(8,'0008_add_daily_verse_stat.sql','2026-06-04 15:40:40');
-INSERT INTO "d1_migrations" ("id","name","applied_at") VALUES(9,'0009_add_user_settings.sql','2026-06-04 15:40:41');
-INSERT INTO "d1_migrations" ("id","name","applied_at") VALUES(10,'0010_missing_columns.sql','2026-06-04 15:40:42');
-INSERT INTO "d1_migrations" ("id","name","applied_at") VALUES(11,'0011_rename_difficulty_to_level.sql','2026-06-05 13:04:35');
-INSERT INTO "d1_migrations" ("id","name","applied_at") VALUES(12,'0012_add_book_model.sql','2026-06-05 14:57:52');
-INSERT INTO "d1_migrations" ("id","name","applied_at") VALUES(13,'0013_add_videoUrl_to_devotion_day.sql','2026-06-05 17:59:40');
-INSERT INTO "d1_migrations" ("id","name","applied_at") VALUES(14,'0014_add_comment_reactions_and_replies.sql','2026-07-02 10:40:42');
-INSERT INTO "d1_migrations" ("id","name","applied_at") VALUES(15,'0014_add_devotion_day_like.sql','2026-07-14 14:21:59');
-INSERT INTO "d1_migrations" ("id","name","applied_at") VALUES(16,'0015_add_affirmation.sql','2026-07-14 14:24:01');
-INSERT INTO "d1_migrations" ("id","name","applied_at") VALUES(17,'0016_subscriptions_media.sql','2026-07-14 14:24:02');
-INSERT INTO "d1_migrations" ("id","name","applied_at") VALUES(18,'0017_community_privacy.sql','2026-07-14 14:24:02');
-INSERT INTO "d1_migrations" ("id","name","applied_at") VALUES(19,'0018_add_community_event_link.sql','2026-07-14 14:24:03');
-INSERT INTO "d1_migrations" ("id","name","applied_at") VALUES(20,'0019_add_app_feature_value.sql','2026-07-14 14:24:03');
-INSERT INTO "d1_migrations" ("id","name","applied_at") VALUES(21,'0020_add_saved_book.sql','2026-07-14 14:24:04');
-INSERT INTO "d1_migrations" ("id","name","applied_at") VALUES(22,'0021_add_community_verses.sql','2026-07-14 14:24:04');
-INSERT INTO "d1_migrations" ("id","name","applied_at") VALUES(23,'0002_community_moderation.sql','2026-07-14 14:24:50');
-INSERT INTO "d1_migrations" ("id","name","applied_at") VALUES(24,'0021b_add_community_message.sql','2026-07-14 14:26:47');
-INSERT INTO "d1_migrations" ("id","name","applied_at") VALUES(25,'0022_add_community_message_interactions.sql','2026-07-14 14:26:47');
-INSERT INTO "d1_migrations" ("id","name","applied_at") VALUES(26,'0023_add_community_reactions.sql','2026-07-14 14:26:47');
-INSERT INTO "d1_migrations" ("id","name","applied_at") VALUES(27,'0024_add_autoscroll_user.sql','2026-07-14 14:53:36');
-INSERT INTO "d1_migrations" ("id","name","applied_at") VALUES(28,'0025_add_communityevent_fields.sql','2026-07-14 15:09:24');
-INSERT INTO "d1_migrations" ("id","name","applied_at") VALUES(29,'0001b_add_book_model.sql','2026-07-15 14:15:30');
-INSERT INTO "d1_migrations" ("id","name","applied_at") VALUES(30,'0026_sync_schema.sql','2026-07-15 14:16:52');
-INSERT INTO "d1_migrations" ("id","name","applied_at") VALUES(31,'0027_update_user_points.sql','2026-07-15 14:16:52');
-CREATE TABLE IF NOT EXISTS "OtpRequest" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "contact" TEXT NOT NULL,
-    "code" TEXT NOT NULL,
-    "expiresAt" DATETIME NOT NULL,
-    "verified" BOOLEAN NOT NULL DEFAULT false,
-    "userId" TEXT,
-    CONSTRAINT "OtpRequest_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE SET NULL ON UPDATE CASCADE
-);
+PRAGMA foreign_keys=OFF;
 INSERT INTO "OtpRequest" ("id","contact","code","expiresAt","verified","userId") VALUES('dac70dc1-e439-4b36-aada-41d76a6c87e4','+2348138358981','9348','2026-06-05T12:06:20.760+00:00',1,NULL);
-CREATE TABLE IF NOT EXISTS "UserFeeling" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "userId" TEXT NOT NULL,
-    "feeling" TEXT NOT NULL,
-    "emoji" TEXT NOT NULL,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "UserFeeling_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
-);
 INSERT INTO "UserFeeling" ("id","userId","feeling","emoji","createdAt") VALUES('9824d2a8-e9ac-4611-852c-14dfd20ecb02','user-1','Peaceful','🕊️','2026-07-11T11:14:31.738+00:00');
 INSERT INTO "UserFeeling" ("id","userId","feeling","emoji","createdAt") VALUES('8271978e-664b-4268-94de-29d7e15d02a8','7eb43e16-3cae-430c-90c6-2535d92254ac','Hopeful','🌟','2026-07-10T15:41:35.190+00:00');
-CREATE TABLE IF NOT EXISTS "FriendRequest" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "senderId" TEXT NOT NULL,
-    "receiverId" TEXT NOT NULL,
-    "status" TEXT NOT NULL DEFAULT 'PENDING',
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "FriendRequest_senderId_fkey" FOREIGN KEY ("senderId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT "FriendRequest_receiverId_fkey" FOREIGN KEY ("receiverId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
-);
 INSERT INTO "FriendRequest" ("id","senderId","receiverId","status","createdAt") VALUES('fr100','u100','u101','ACCEPTED','2026-06-05 15:33:56');
 INSERT INTO "FriendRequest" ("id","senderId","receiverId","status","createdAt") VALUES('fr101','u102','u100','ACCEPTED','2026-06-05 15:33:56');
 INSERT INTO "FriendRequest" ("id","senderId","receiverId","status","createdAt") VALUES('288c85a8-0bcb-4e6e-b8d8-53fd1c87dba3','7eb43e16-3cae-430c-90c6-2535d92254ac','user-2','PENDING','2026-06-05T15:48:58.235+00:00');
 INSERT INTO "FriendRequest" ("id","senderId","receiverId","status","createdAt") VALUES('9fbf4025-ea2d-47ff-bc74-6f4e975325d0','7eb43e16-3cae-430c-90c6-2535d92254ac','user-1','ACCEPTED','2026-06-05T15:49:16.688+00:00');
 INSERT INTO "FriendRequest" ("id","senderId","receiverId","status","createdAt") VALUES('9e6f2da0-6fc7-40a5-a341-3da59a0f98b3','user-1','u100','PENDING','2026-07-02T17:04:30.949+00:00');
-CREATE TABLE IF NOT EXISTS "DirectChat" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "user1Id" TEXT NOT NULL,
-    "user2Id" TEXT NOT NULL,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "DirectChat_user1Id_fkey" FOREIGN KEY ("user1Id") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT "DirectChat_user2Id_fkey" FOREIGN KEY ("user2Id") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
-);
 INSERT INTO "DirectChat" ("id","user1Id","user2Id","createdAt") VALUES('f2b3b87c-4813-43f9-8c24-4240d6ea8be1','user-1','7eb43e16-3cae-430c-90c6-2535d92254ac','2026-07-03T09:19:12.525+00:00');
-CREATE TABLE IF NOT EXISTS "DirectMessage" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "chatId" TEXT NOT NULL,
-    "senderId" TEXT NOT NULL,
-    "text" TEXT NOT NULL,
-    "image" TEXT,
-    "isRead" BOOLEAN NOT NULL DEFAULT false,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "DirectMessage_chatId_fkey" FOREIGN KEY ("chatId") REFERENCES "DirectChat" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT "DirectMessage_senderId_fkey" FOREIGN KEY ("senderId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
-);
 INSERT INTO "DirectMessage" ("id","chatId","senderId","text","image","isRead","createdAt") VALUES('4a27013b-4340-4e73-8723-9ab5512f138f','f2b3b87c-4813-43f9-8c24-4240d6ea8be1','user-1','hello',NULL,0,'2026-07-03T09:19:32.506+00:00');
-CREATE TABLE IF NOT EXISTS "ChatPin" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "chatId" TEXT NOT NULL,
-    "userId" TEXT NOT NULL,
-    "pinnedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "ChatPin_chatId_fkey" FOREIGN KEY ("chatId") REFERENCES "DirectChat" ("id") ON DELETE CASCADE ON UPDATE CASCADE
-);
-CREATE TABLE IF NOT EXISTS "JournalEntry" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "userId" TEXT NOT NULL,
-    "title" TEXT NOT NULL,
-    "bodyText" TEXT NOT NULL,
-    "feelings" TEXT NOT NULL,
-    "verses" TEXT,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "JournalEntry_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
-);
-CREATE TABLE IF NOT EXISTS "PersonalNote" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "userId" TEXT NOT NULL,
-    "title" TEXT NOT NULL,
-    "bodyText" TEXT NOT NULL,
-    "isFavorite" BOOLEAN NOT NULL DEFAULT false,
-    "images" TEXT NOT NULL,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, "verses" TEXT,
-    CONSTRAINT "PersonalNote_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
-);
-CREATE TABLE IF NOT EXISTS "Post" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "communityId" TEXT NOT NULL,
-    "userId" TEXT NOT NULL,
-    "text" TEXT NOT NULL,
-    "image" TEXT,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "Post_communityId_fkey" FOREIGN KEY ("communityId") REFERENCES "Community" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT "Post_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
-);
-CREATE TABLE IF NOT EXISTS "PostReaction" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "postId" TEXT NOT NULL,
-    "userId" TEXT NOT NULL,
-    "emoji" TEXT NOT NULL,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "PostReaction_postId_fkey" FOREIGN KEY ("postId") REFERENCES "Post" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT "PostReaction_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
-);
-CREATE TABLE IF NOT EXISTS "CommunityEvent" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "communityId" TEXT NOT NULL,
-    "title" TEXT NOT NULL,
-    "description" TEXT NOT NULL,
-    "date" TEXT NOT NULL,
-    "time" TEXT NOT NULL,
-    "location" TEXT NOT NULL,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, "link" TEXT, "imageUrl" TEXT,
-    CONSTRAINT "CommunityEvent_communityId_fkey" FOREIGN KEY ("communityId") REFERENCES "Community" ("id") ON DELETE CASCADE ON UPDATE CASCADE
-);
-CREATE TABLE IF NOT EXISTS "EventAttendee" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "eventId" TEXT NOT NULL,
-    "userId" TEXT NOT NULL,
-    "joined" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "EventAttendee_eventId_fkey" FOREIGN KEY ("eventId") REFERENCES "CommunityEvent" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT "EventAttendee_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
-);
-CREATE TABLE IF NOT EXISTS "GroupMessage" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "communityId" TEXT NOT NULL,
-    "senderId" TEXT NOT NULL,
-    "text" TEXT NOT NULL,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, "audioThumbnail" TEXT, "audioUrl" TEXT, "imageUrl" TEXT, "videoThumbnail" TEXT, "videoUrl" TEXT,
-    CONSTRAINT "GroupMessage_communityId_fkey" FOREIGN KEY ("communityId") REFERENCES "Community" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT "GroupMessage_senderId_fkey" FOREIGN KEY ("senderId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
-);
-CREATE TABLE IF NOT EXISTS "BibleBookmark" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "userId" TEXT NOT NULL,
-    "verseRef" TEXT NOT NULL,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "BibleBookmark_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
-);
-CREATE TABLE IF NOT EXISTS "BibleHighlight" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "userId" TEXT NOT NULL,
-    "verseRef" TEXT NOT NULL,
-    "color" TEXT NOT NULL,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "BibleHighlight_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
-);
-CREATE TABLE IF NOT EXISTS "BibleNote" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "userId" TEXT NOT NULL,
-    "verseRef" TEXT NOT NULL,
-    "noteText" TEXT NOT NULL,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "BibleNote_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
-);
-CREATE TABLE IF NOT EXISTS "BibleReadingHistory" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "userId" TEXT NOT NULL,
-    "verseRef" TEXT NOT NULL,
-    "readAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "BibleReadingHistory_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
-);
-CREATE TABLE IF NOT EXISTS "DevotionPlan" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "title" TEXT NOT NULL,
-    "description" TEXT NOT NULL,
-    "image" TEXT,
-    "durationDays" INTEGER NOT NULL,
-    "authorName" TEXT NOT NULL,
-    "authorHandle" TEXT NOT NULL,
-    "tag" TEXT NOT NULL,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
 INSERT INTO "DevotionPlan" ("id","title","description","image","durationDays","authorName","authorHandle","tag","createdAt") VALUES('dp100','Walking in Faith','A 5-day journey through the fundamentals of faith.','https://images.unsplash.com/photo-1504052434569-70ad5836ab65?auto=format&fit=crop&w=800&h=400&q=80',5,'Pastor John','@pastorjohn','Faith','2026-06-05 15:33:56');
 INSERT INTO "DevotionPlan" ("id","title","description","image","durationDays","authorName","authorHandle","tag","createdAt") VALUES('dp101','Morning Grace','Start your day with God.','https://images.unsplash.com/photo-1490730141103-6cac27aaab94?auto=format&fit=crop&w=800&h=400&q=80',3,'Sarah Smith','@sarahs','Grace','2026-06-05 15:33:56');
 INSERT INTO "DevotionPlan" ("id","title","description","image","durationDays","authorName","authorHandle","tag","createdAt") VALUES('64782835-dc59-431d-a785-ef8984ddefa4','Faith Under Fire','Strengthen your faith and resolve in the midst of challenging circumstances and life storms.','https://images.unsplash.com/photo-1504052434569-70ad5836ab65?auto=format&fit=crop&w=800&q=80',5,'Apostle Joshua Selman','@joshuaselman','Faith & Resilience','2026-07-07T10:02:54.543+00:00');
@@ -212,18 +16,6 @@ INSERT INTO "DevotionPlan" ("id","title","description","image","durationDays","a
 INSERT INTO "DevotionPlan" ("id","title","description","image","durationDays","authorName","authorHandle","tag","createdAt") VALUES('b59d06a5-a41d-4b58-9cb3-257b856c5bdc','Walk in Love','Explore what it truly means to walk in the perfect love of Christ daily.','https://images.unsplash.com/photo-1504052434569-70ad5836ab65?auto=format&fit=crop&w=800&q=80',3,'Pastor Tunde','@pastortunde','Love & Grace','2026-07-07T10:02:55.056+00:00');
 INSERT INTO "DevotionPlan" ("id","title","description","image","durationDays","authorName","authorHandle","tag","createdAt") VALUES('0ac788a7-55e7-4343-a7a7-fda230b6e4b4','Excellence in Leadership','Discover the principles of visionary leadership and impact in your generation.','https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&w=800&q=80',3,'Pastor Sam Adeyemi','@samadeyemi','Leadership & Success','2026-07-13 14:09:42');
 INSERT INTO "DevotionPlan" ("id","title","description","image","durationDays","authorName","authorHandle","tag","createdAt") VALUES('f78a2056-f00e-4b95-825f-a9a2bfc10a5a','Divine Speed & Purpose','Break through limitations and experience the supernatural acceleration of God in your assignments.','https://images.unsplash.com/photo-1455309036818-60c69d898171?auto=format&fit=crop&w=800&q=80',5,'Apostle Joshua Selman','@joshuaselman','Purpose & Growth','2026-07-13 14:09:42');
-CREATE TABLE IF NOT EXISTS "DevotionDay" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "planId" TEXT NOT NULL,
-    "dayNumber" INTEGER NOT NULL,
-    "title" TEXT NOT NULL,
-    "bodyText" TEXT NOT NULL,
-    "image" TEXT,
-    "pointsEarned" INTEGER NOT NULL DEFAULT 20,
-    "likesCount" INTEGER NOT NULL DEFAULT 0,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, "videoUrl" TEXT,
-    CONSTRAINT "DevotionDay_planId_fkey" FOREIGN KEY ("planId") REFERENCES "DevotionPlan" ("id") ON DELETE CASCADE ON UPDATE CASCADE
-);
 INSERT INTO "DevotionDay" ("id","planId","dayNumber","title","bodyText","image","pointsEarned","likesCount","createdAt","videoUrl") VALUES('faf63373-4cef-43fe-86dd-9a7fbc782771','64782835-dc59-431d-a785-ef8984ddefa4',1,'The Purpose of Trials','Trials are not meant to destroy you but to refine you. Just as gold is tried in the fire, your faith is purified when subjected to the heat of life''s challenges.','https://images.unsplash.com/photo-1504052434569-70ad5836ab65?auto=format&fit=crop&w=800&q=80',20,0,'2026-07-07T10:02:54.543+00:00','https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&w=800&q=80');
 INSERT INTO "DevotionDay" ("id","planId","dayNumber","title","bodyText","image","pointsEarned","likesCount","createdAt","videoUrl") VALUES('ffd50b9e-1795-4e7a-b6f6-ec101182f71b','64782835-dc59-431d-a785-ef8984ddefa4',2,'Anchored in the Word','When the winds of adversity blow, only those anchored in the Word of God will remain steadfast. Let the scripture be your ultimate reality.','https://images.unsplash.com/photo-1504052434569-70ad5836ab65?auto=format&fit=crop&w=800&q=80',20,0,'2026-07-07T10:02:54.543+00:00','https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&w=800&q=80');
 INSERT INTO "DevotionDay" ("id","planId","dayNumber","title","bodyText","image","pointsEarned","likesCount","createdAt","videoUrl") VALUES('34ca8ecd-d844-4a1d-be0d-c2133b6bccbd','64782835-dc59-431d-a785-ef8984ddefa4',3,'The Shield of Faith','Faith is your shield against the fiery darts of the enemy. It is a deliberate choice to trust God''s character even when you cannot trace His hand.','https://images.unsplash.com/photo-1504052434569-70ad5836ab65?auto=format&fit=crop&w=800&q=80',20,0,'2026-07-07T10:02:54.543+00:00','https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&w=800&q=80');
@@ -243,122 +35,12 @@ INSERT INTO "DevotionDay" ("id","planId","dayNumber","title","bodyText","image",
 INSERT INTO "DevotionDay" ("id","planId","dayNumber","title","bodyText","image","pointsEarned","likesCount","createdAt","videoUrl") VALUES('a978ecc5-9774-4beb-b3c6-d8e38c8f1f4b','f78a2056-f00e-4b95-825f-a9a2bfc10a5a',3,'Eliminating Distractions','The enemy of great focus is not always bad things, but good things that have nothing to do with your current assignment. To experience true momentum and speed, you must learn to boldly say "No" to peripheral opportunities that drain your spiritual energy and time. Lay aside every weight and the sins that easily beset you, keeping your eyes completely fixed on the goal ahead. Streamline your routines, your circles, and your focus to match the magnitude of your vision.','https://images.unsplash.com/photo-1447752875215-b2761acb3c5d?auto=format&fit=crop&w=800&q=80',30,0,'2026-07-13 14:09:42','https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&w=800&q=80');
 INSERT INTO "DevotionDay" ("id","planId","dayNumber","title","bodyText","image","pointsEarned","likesCount","createdAt","videoUrl") VALUES('a6240220-4f26-48cd-aa1b-3a561b1d4024','f78a2056-f00e-4b95-825f-a9a2bfc10a5a',4,'The Power of Divine Alignment','Connection determines direction. Who you walk with, listen to, and submit to will drastically alter the speed of your destiny. Walking in alignment means partnering with the right spiritual cover, cultivating relationships with destiny helpers, and maintaining a pure posture before God. When your character aligns with heaven''s laws, structural blockages break away naturally, clearing a straight, highway-like path for your immediate elevation.','https://images.unsplash.com/photo-1447752875215-b2761acb3c5d?auto=format&fit=crop&w=800&q=80',30,0,'2026-07-13 14:09:42','https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&w=800&q=80');
 INSERT INTO "DevotionDay" ("id","planId","dayNumber","title","bodyText","image","pointsEarned","likesCount","createdAt","videoUrl") VALUES('332d04e3-f6fc-4ed0-9598-a1aa843192ae','f78a2056-f00e-4b95-825f-a9a2bfc10a5a',5,'Sustaining Momentum','Reaching a peak is one thing, but staying there requires a completely different level of spiritual discipline. To sustain the momentum of divine speed, your secret place of prayer, word study, and worship must remain completely non-negotiable. Success must never breed complacency or pride in your heart. Stay small in your own eyes, continuously give all the glory back to the Father, and remain a teachable vessel ready for the next instruction.','https://images.unsplash.com/photo-1447752875215-b2761acb3c5d?auto=format&fit=crop&w=800&q=80',30,0,'2026-07-13 14:09:42','https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&w=800&q=80');
-CREATE TABLE IF NOT EXISTS "UserPlanProgress" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "userId" TEXT NOT NULL,
-    "planId" TEXT NOT NULL,
-    "currentDay" INTEGER NOT NULL DEFAULT 1,
-    "reminderTime" TEXT NOT NULL DEFAULT '09:41 AM',
-    "reminderEnabled" BOOLEAN NOT NULL DEFAULT true,
-    "startedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "completedAt" DATETIME,
-    CONSTRAINT "UserPlanProgress_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
-);
 INSERT INTO "UserPlanProgress" ("id","userId","planId","currentDay","reminderTime","reminderEnabled","startedAt","completedAt") VALUES('9234aa4c-affc-497f-944e-5c03b27ff7c8','user-1','dp100',1,'09:41 AM',1,'2026-06-25T14:49:55.077+00:00',NULL);
 INSERT INTO "UserPlanProgress" ("id","userId","planId","currentDay","reminderTime","reminderEnabled","startedAt","completedAt") VALUES('02fa6fbc-f7a3-4be6-9698-08a452992fc9','user-1','07ee32c7-b34b-4e43-8608-50ac5181ff62',1,'09:41 AM',1,'2026-07-14T15:03:53.402+00:00',NULL);
-CREATE TABLE IF NOT EXISTS "PlayProgress" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "userId" TEXT NOT NULL,
-    "mediaId" TEXT NOT NULL,
-    "progressSeconds" INTEGER NOT NULL DEFAULT 0,
-    "completed" BOOLEAN NOT NULL DEFAULT false,
-    "updatedAt" DATETIME NOT NULL,
-    CONSTRAINT "PlayProgress_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT "PlayProgress_mediaId_fkey" FOREIGN KEY ("mediaId") REFERENCES "SermonMedia" ("id") ON DELETE CASCADE ON UPDATE CASCADE
-);
 INSERT INTO "PlayProgress" ("id","userId","mediaId","progressSeconds","completed","updatedAt") VALUES('2d4970c4-37df-4e3a-8939-7f724c06a52e','user-1','02549fc1-5c6b-436a-8543-df6f06c901fd',4,0,'2026-07-14T14:59:25.677+00:00');
-CREATE TABLE IF NOT EXISTS "Quiz" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "title" TEXT NOT NULL,
-    "category" TEXT NOT NULL,
-    "difficulty" TEXT NOT NULL,
-    "points" INTEGER NOT NULL DEFAULT 50,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-CREATE TABLE IF NOT EXISTS "Question" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "quizId" TEXT NOT NULL,
-    "questionText" TEXT NOT NULL,
-    "options" TEXT NOT NULL,
-    "correctAnswerIndex" INTEGER NOT NULL,
-    "points" INTEGER NOT NULL DEFAULT 10,
-    CONSTRAINT "Question_quizId_fkey" FOREIGN KEY ("quizId") REFERENCES "Quiz" ("id") ON DELETE CASCADE ON UPDATE CASCADE
-);
-CREATE TABLE IF NOT EXISTS "QuizAttempt" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "userId" TEXT NOT NULL,
-    "quizId" TEXT NOT NULL,
-    "score" INTEGER NOT NULL,
-    "pointsEarned" INTEGER NOT NULL,
-    "completedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "QuizAttempt_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT "QuizAttempt_quizId_fkey" FOREIGN KEY ("quizId") REFERENCES "Quiz" ("id") ON DELETE CASCADE ON UPDATE CASCADE
-);
-CREATE TABLE IF NOT EXISTS "DailyBread" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "date" TEXT NOT NULL,
-    "puzzleData" TEXT NOT NULL,
-    "solution" TEXT NOT NULL
-);
-CREATE TABLE IF NOT EXISTS "DailyBreadAttempt" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "userId" TEXT NOT NULL,
-    "dailyBreadId" TEXT NOT NULL,
-    "solved" BOOLEAN NOT NULL DEFAULT false,
-    "streakAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "DailyBreadAttempt_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT "DailyBreadAttempt_dailyBreadId_fkey" FOREIGN KEY ("dailyBreadId") REFERENCES "DailyBread" ("id") ON DELETE CASCADE ON UPDATE CASCADE
-);
-CREATE TABLE IF NOT EXISTS "Challenge" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "creatorId" TEXT NOT NULL,
-    "opponentId" TEXT,
-    "quizId" TEXT NOT NULL,
-    "type" TEXT NOT NULL,
-    "status" TEXT NOT NULL DEFAULT 'PENDING',
-    "inviteCode" TEXT NOT NULL,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "Challenge_creatorId_fkey" FOREIGN KEY ("creatorId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT "Challenge_opponentId_fkey" FOREIGN KEY ("opponentId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
-);
-CREATE TABLE IF NOT EXISTS "ChallengeParticipant" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "challengeId" TEXT NOT NULL,
-    "userId" TEXT NOT NULL,
-    "score" INTEGER NOT NULL DEFAULT 0,
-    "completed" BOOLEAN NOT NULL DEFAULT false,
-    CONSTRAINT "ChallengeParticipant_challengeId_fkey" FOREIGN KEY ("challengeId") REFERENCES "Challenge" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT "ChallengeParticipant_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
-);
-CREATE TABLE IF NOT EXISTS "Badge" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "name" TEXT NOT NULL,
-    "description" TEXT NOT NULL,
-    "imageUrl" TEXT NOT NULL,
-    "criteriaType" TEXT NOT NULL,
-    "criteriaValue" INTEGER NOT NULL
-);
 INSERT INTO "Badge" ("id","name","description","imageUrl","criteriaType","criteriaValue") VALUES('0b7a3735-8518-4dd5-8dbd-0b661580fd12','First Word','Solve your first Daily Bread puzzle','/assets/badges/first_word.png','DAILY_BREAD_SOLVE',1);
 INSERT INTO "Badge" ("id","name","description","imageUrl","criteriaType","criteriaValue") VALUES('863084a0-4274-4c1a-934c-34ac86d5e0f0','Quiz Master','Win 5 Trivia Quizzes','/assets/badges/quiz_master.png','QUIZ_WIN',5);
 INSERT INTO "Badge" ("id","name","description","imageUrl","criteriaType","criteriaValue") VALUES('a21cb6c6-575a-48b2-b852-c57c215d6922','Streak Builder','Achieve a 7-day study streak','/assets/badges/streak_builder.png','STREAK_DAYS',7);
-CREATE TABLE IF NOT EXISTS "EarnedBadge" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "userId" TEXT NOT NULL,
-    "badgeId" TEXT NOT NULL,
-    "earnedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "EarnedBadge_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT "EarnedBadge_badgeId_fkey" FOREIGN KEY ("badgeId") REFERENCES "Badge" ("id") ON DELETE CASCADE ON UPDATE CASCADE
-);
-CREATE TABLE IF NOT EXISTS "LoginHistory" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "userId" TEXT NOT NULL,
-    "ip" TEXT,
-    "browser" TEXT,
-    "os" TEXT,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "LoginHistory_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
-);
 INSERT INTO "LoginHistory" ("id","userId","ip","browser","os","createdAt") VALUES('8b758de2-b9ff-44e6-a8ac-324d77b8311f','7eb43e16-3cae-430c-90c6-2535d92254ac','127.0.0.1','Chrome','Mac OS','2026-06-05T13:06:34.896+00:00');
 INSERT INTO "LoginHistory" ("id","userId","ip","browser","os","createdAt") VALUES('5a5f2059-9b3a-4cea-afde-ecaf0dbbc5c3','7eb43e16-3cae-430c-90c6-2535d92254ac','127.0.0.1','Chrome','Mac OS','2026-06-05T13:32:57.953+00:00');
 INSERT INTO "LoginHistory" ("id","userId","ip","browser","os","createdAt") VALUES('56ab9545-a1d1-4d96-8a96-1953bd39107f','user-1','127.0.0.1','Chrome','Mac OS','2026-06-05T13:52:27.943+00:00');
@@ -370,48 +52,8 @@ INSERT INTO "LoginHistory" ("id","userId","ip","browser","os","createdAt") VALUE
 INSERT INTO "LoginHistory" ("id","userId","ip","browser","os","createdAt") VALUES('a6ec5c02-b5bf-4b9b-88c3-06875087922c','user-1','98.97.76.68','Unknown','Unknown','2026-07-10T15:59:22.971+00:00');
 INSERT INTO "LoginHistory" ("id","userId","ip","browser","os","createdAt") VALUES('e21ebfd0-8754-4b0f-be48-af004bbcdf5e','user-1','98.97.76.58','Unknown','Unknown','2026-07-14T14:53:54.762+00:00');
 INSERT INTO "LoginHistory" ("id","userId","ip","browser","os","createdAt") VALUES('81241b7e-d4a4-41e0-bdc5-bae01a634aa2','7eb43e16-3cae-430c-90c6-2535d92254ac','246.142.188.0','Chrome','Mac OS','2026-07-15T14:30:18.534+00:00');
-CREATE TABLE IF NOT EXISTS "WordMatchQuestion" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "word" TEXT NOT NULL,
-    "match" TEXT NOT NULL,
-    "difficulty" TEXT NOT NULL DEFAULT 'easy',
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL
-);
-CREATE TABLE IF NOT EXISTS "WordCrossQuestion" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "word" TEXT NOT NULL,
-    "clue" TEXT NOT NULL,
-    "difficulty" TEXT NOT NULL DEFAULT 'easy',
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL
-);
-CREATE TABLE IF NOT EXISTS "GameSettings" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "gameType" TEXT NOT NULL,
-    "totalQuestions" INTEGER NOT NULL DEFAULT 10,
-    "durationSecs" INTEGER NOT NULL DEFAULT 60,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL
-);
-CREATE TABLE IF NOT EXISTS "GameScore" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "userId" TEXT NOT NULL,
-    "gameType" TEXT NOT NULL,
-    "difficulty" TEXT NOT NULL,
-    "score" INTEGER NOT NULL,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "GameScore_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
-);
 INSERT INTO "GameScore" ("id","userId","gameType","difficulty","score","createdAt") VALUES('f3d3c189-cfa6-416f-822a-8acc56697e2e','7eb43e16-3cae-430c-90c6-2535d92254ac','BIBLE_QUIZ','1',10,'2026-06-05T14:08:05.100+00:00');
 INSERT INTO "GameScore" ("id","userId","gameType","difficulty","score","createdAt") VALUES('6616c486-2e86-462f-aced-6ae3918471ad','7eb43e16-3cae-430c-90c6-2535d92254ac','BIBLE_QUIZ','2',10,'2026-06-05T14:10:33.254+00:00');
-CREATE TABLE IF NOT EXISTS "DailyVerseStat" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "date" TEXT NOT NULL,
-    "likes" INTEGER NOT NULL DEFAULT 0,
-    "shares" INTEGER NOT NULL DEFAULT 0,
-    "comments" INTEGER NOT NULL DEFAULT 0
-);
 INSERT INTO "DailyVerseStat" ("id","date","likes","shares","comments") VALUES('a1d898c7-94c5-4b60-940b-35544afb978f','2026-06-05',0,0,0);
 INSERT INTO "DailyVerseStat" ("id","date","likes","shares","comments") VALUES('0f66d17c-8a35-4375-b77d-f0d72b8838e0','2026-06-25',0,0,0);
 INSERT INTO "DailyVerseStat" ("id","date","likes","shares","comments") VALUES('bdcab569-a4b6-4bc4-9523-cb3f929f9028','2026-07-01',1,1,0);
@@ -422,21 +64,7 @@ INSERT INTO "DailyVerseStat" ("id","date","likes","shares","comments") VALUES('3
 INSERT INTO "DailyVerseStat" ("id","date","likes","shares","comments") VALUES('dda036d3-caa6-41e6-a264-87c5869eaaea','2026-07-10',0,0,0);
 INSERT INTO "DailyVerseStat" ("id","date","likes","shares","comments") VALUES('f7f9797a-0377-4921-864f-8034544b693d','2026-07-11',0,0,0);
 INSERT INTO "DailyVerseStat" ("id","date","likes","shares","comments") VALUES('fbf149f3-defa-483a-819a-001804e778f4','2026-07-14',0,0,0);
-CREATE TABLE IF NOT EXISTS "DailyVerseLike" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "userId" TEXT NOT NULL,
-    "date" TEXT NOT NULL,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "DailyVerseLike_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
-);
 INSERT INTO "DailyVerseLike" ("id","userId","date","createdAt") VALUES('8cddafd0-ca06-4211-b589-1d87b0a62f2d','user-1','2026-07-01','2026-07-01T14:57:28.594+00:00');
-CREATE TABLE IF NOT EXISTS "AppFeature" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "key" TEXT NOT NULL,
-    "isEnabled" BOOLEAN NOT NULL DEFAULT true,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL
-, "value" TEXT);
 INSERT INTO "AppFeature" ("id","key","isEnabled","createdAt","updatedAt","value") VALUES('f95288ed-23b6-4ec5-8ea8-6d866b54d98a','community',1,'2026-06-05T13:52:46.594+00:00','2026-07-07T14:09:30.416+00:00',NULL);
 INSERT INTO "AppFeature" ("id","key","isEnabled","createdAt","updatedAt","value") VALUES('d9b7421c-c9f6-4b0c-a622-ffd0cbe0c2d5','devotion',1,'2026-06-05T13:52:47.650+00:00','2026-07-07T14:09:27.809+00:00',NULL);
 INSERT INTO "AppFeature" ("id","key","isEnabled","createdAt","updatedAt","value") VALUES('e2827e4d-8d46-4c52-bed7-388a20853150','community_events',1,'2026-06-05T13:52:48.349+00:00','2026-07-07T14:09:26.826+00:00',NULL);
@@ -444,30 +72,11 @@ INSERT INTO "AppFeature" ("id","key","isEnabled","createdAt","updatedAt","value"
 INSERT INTO "AppFeature" ("id","key","isEnabled","createdAt","updatedAt","value") VALUES('df280314-e211-4d94-8bd0-960b89637ff9','audioMessages',1,'2026-06-05T13:52:50.698+00:00','2026-07-07T14:09:26.081+00:00',NULL);
 INSERT INTO "AppFeature" ("id","key","isEnabled","createdAt","updatedAt","value") VALUES('0aac806a-0025-49b1-aa40-755d357df0cc','connect',1,'2026-06-05T13:52:51.382+00:00','2026-07-07T14:09:25.238+00:00',NULL);
 INSERT INTO "AppFeature" ("id","key","isEnabled","createdAt","updatedAt","value") VALUES('3999a13b-a542-4832-b9ce-cb34a35ca50c','books',0,'2026-06-05T13:52:52.366+00:00','2026-07-07T14:08:26.359+00:00',NULL);
-CREATE TABLE IF NOT EXISTS "Notification" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "userId" TEXT NOT NULL,
-    "title" TEXT NOT NULL,
-    "message" TEXT NOT NULL,
-    "type" TEXT NOT NULL DEFAULT 'SYSTEM',
-    "isRead" BOOLEAN NOT NULL DEFAULT false,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "Notification_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
-);
 INSERT INTO "Notification" ("id","userId","title","message","type","isRead","createdAt") VALUES('bc6ecb95-516d-49ee-9725-b686a0363828','7eb43e16-3cae-430c-90c6-2535d92254ac','Welcome to Quest! 🌟','Get ready to study the word, challenge your friends, and build daily habits.','SYSTEM',0,'2026-06-05T15:49:24.901+00:00');
 INSERT INTO "Notification" ("id","userId","title","message","type","isRead","createdAt") VALUES('e72324fb-e9b1-4c7d-aa58-7991b97f5180','user-1','Welcome to Quest! 🌟','Get ready to study the word, challenge your friends, and build daily habits.','SYSTEM',1,'2026-07-01T17:39:13.251+00:00');
 INSERT INTO "Notification" ("id","userId","title","message","type","isRead","createdAt") VALUES('26200bf0-8ad1-468c-a59c-6bec5687f76e','7eb43e16-3cae-430c-90c6-2535d92254ac','Friend Request Accepted','John accepted your friend request.','FRIEND_ACCEPTED',0,'2026-07-02T17:04:22.030+00:00');
 INSERT INTO "Notification" ("id","userId","title","message","type","isRead","createdAt") VALUES('79057608-061c-4ba2-934a-82c2f2af289c','u100','New Friend Request','John sent you a friend request.','FRIEND_REQUEST',0,'2026-07-02T17:04:30.961+00:00');
 INSERT INTO "Notification" ("id","userId","title","message","type","isRead","createdAt") VALUES('02dae076-c74d-4603-becd-d7c60cc9d2ad','7eb43e16-3cae-430c-90c6-2535d92254ac','New Message','John sent you a message.','CHAT_MESSAGE',0,'2026-07-03T09:19:32.543+00:00');
-CREATE TABLE IF NOT EXISTS "BibleQuizQuestion" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "questionText" TEXT NOT NULL,
-    "options" TEXT NOT NULL,
-    "correctAnswerIndex" INTEGER NOT NULL,
-    "level" INTEGER NOT NULL DEFAULT 1,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL
-);
 INSERT INTO "BibleQuizQuestion" ("id","questionText","options","correctAnswerIndex","level","createdAt","updatedAt") VALUES('5b1cbfa1-6224-460d-a103-cde15cc72ed6','Who was the first man created by God?','["Cain","Abel","Adam","Seth"]',2,1,'2026-06-05T14:06:31.680+00:00','2026-06-05T14:06:31.680+00:00');
 INSERT INTO "BibleQuizQuestion" ("id","questionText","options","correctAnswerIndex","level","createdAt","updatedAt") VALUES('051e64f4-9299-48bd-84dc-39f5cf8c5ea2','What did God use to create Eve?','["Dust of the ground","A rib from Adam","A flower","An apple"]',1,1,'2026-06-05T14:06:31.705+00:00','2026-06-05T14:06:31.705+00:00');
 INSERT INTO "BibleQuizQuestion" ("id","questionText","options","correctAnswerIndex","level","createdAt","updatedAt") VALUES('9c20b02b-7449-4313-bdee-a148c5c657b3','How many days did it take God to create the heavens and the earth?','["3 days","6 days","7 days","10 days"]',1,1,'2026-06-05T14:06:31.712+00:00','2026-06-05T14:06:31.712+00:00');
@@ -768,99 +377,15 @@ INSERT INTO "BibleQuizQuestion" ("id","questionText","options","correctAnswerInd
 INSERT INTO "BibleQuizQuestion" ("id","questionText","options","correctAnswerIndex","level","createdAt","updatedAt") VALUES('0485c0d3-5487-47c7-ae46-cb1a379758e8','In the book of Revelation, what was the name of the church leader or individual called ''the angel of the church in Pergamum'' where Satan’s throne is, who had a faithful martyr named Antipas?','["Antipas","Polycarp","Epaphras","The text only mentions Antipas as the martyr"]',3,20,'2026-06-05T14:06:33.950+00:00','2026-06-05T14:06:33.950+00:00');
 INSERT INTO "BibleQuizQuestion" ("id","questionText","options","correctAnswerIndex","level","createdAt","updatedAt") VALUES('3a1a10ee-bfba-440e-b5b2-2f9245e9cf86','What is the name of the star that falls from heaven in the eighth chapter of Revelation, making a third of the waters bitter?','["Wormwood","Apollyon","Abaddon","Lucifer"]',0,20,'2026-06-05T14:06:33.955+00:00','2026-06-05T14:06:33.955+00:00');
 INSERT INTO "BibleQuizQuestion" ("id","questionText","options","correctAnswerIndex","level","createdAt","updatedAt") VALUES('c3ffff1e-5fff-4514-a723-7fe6b8de0137','Which tribe of Israel is omitted from the list of the 144,000 sealed individuals in Revelation 7?','["Dan","Ephraim","Both Dan and Ephraim are omitted (replaced by Levi and Joseph)","Simeon"]',2,20,'2026-06-05T14:06:33.959+00:00','2026-06-05T14:06:33.959+00:00');
-CREATE TABLE IF NOT EXISTS "User" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "email" TEXT,
-    "phoneNumber" TEXT,
-    "password" TEXT,
-    "firstName" TEXT,
-    "lastName" TEXT,
-    "username" TEXT,
-    "gender" TEXT,
-    "avatarUrl" TEXT,
-    "bio" TEXT,
-    "points" INTEGER NOT NULL DEFAULT 0,
-    "streakCount" INTEGER NOT NULL DEFAULT 0,
-    "isGuest" BOOLEAN NOT NULL DEFAULT false,
-    "isAdmin" BOOLEAN NOT NULL DEFAULT false,
-    "isBanned" BOOLEAN NOT NULL DEFAULT false,
-    "location" TEXT,
-    "appearance" TEXT NOT NULL DEFAULT 'system',
-    "soundAlerts" BOOLEAN NOT NULL DEFAULT true,
-    "hapticFeedback" BOOLEAN NOT NULL DEFAULT true,
-    "music" BOOLEAN NOT NULL DEFAULT true,
-    "allNotifications" BOOLEAN NOT NULL DEFAULT true,
-    "inAppNotifications" BOOLEAN NOT NULL DEFAULT true,
-    "doNotDisturb" BOOLEAN NOT NULL DEFAULT false,
-    "reminderMorning" BOOLEAN NOT NULL DEFAULT false,
-    "reminderAfternoon" BOOLEAN NOT NULL DEFAULT false,
-    "reminderEvening" BOOLEAN NOT NULL DEFAULT false,
-    "reminderCustomTime" TEXT,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL,
-    "fcmToken" TEXT,
-    "bibleQuizLevel" INTEGER NOT NULL DEFAULT 1
-, "pushDirectMessages" BOOLEAN NOT NULL DEFAULT 1, "pushCommunityPosts" BOOLEAN NOT NULL DEFAULT 1, "pushCommunityForum" BOOLEAN NOT NULL DEFAULT 1, "pushConnectionRequests" BOOLEAN NOT NULL DEFAULT 1, "pushConnectionAccepted" BOOLEAN NOT NULL DEFAULT 1, "autoScroll" BOOLEAN NOT NULL DEFAULT false, "devotionPoints" INTEGER NOT NULL DEFAULT 0, "dailyBreadPoints" INTEGER NOT NULL DEFAULT 0, "audioReelPoints" INTEGER NOT NULL DEFAULT 0, "videoReelPoints" INTEGER NOT NULL DEFAULT 0, "quizPoints" INTEGER NOT NULL DEFAULT 0);
 INSERT INTO "User" ("id","email","phoneNumber","password","firstName","lastName","username","gender","avatarUrl","bio","points","streakCount","isGuest","isAdmin","isBanned","location","appearance","soundAlerts","hapticFeedback","music","allNotifications","inAppNotifications","doNotDisturb","reminderMorning","reminderAfternoon","reminderEvening","reminderCustomTime","createdAt","updatedAt","fcmToken","bibleQuizLevel","pushDirectMessages","pushCommunityPosts","pushCommunityForum","pushConnectionRequests","pushConnectionAccepted","autoScroll","devotionPoints","dailyBreadPoints","audioReelPoints","videoReelPoints","quizPoints") VALUES('7eb43e16-3cae-430c-90c6-2535d92254ac','admin@quest.com','+2348138358981','945da964d78e54ee22f509479627a302:b128d54acef1052c3ecda58e08962f25ddc5ac0346b73703f2048f84e32fe892','Super','Admin','admin','Male',NULL,NULL,20,0,0,1,0,NULL,'system',1,1,1,1,1,0,0,0,0,NULL,'2026-06-05T11:57:10.012+00:00','2026-07-10T15:40:49.381+00:00','dIwCSw93QYuUWM1ykzCood:APA91bEa90qqsucqNf3Ty72K1lT9ku5wz9EkLQG6lYWpURrc3IWncDT_l4DO3kHKvbvRExvYjWRwMi-6_3cppk_FPPAWmZecuqW0ST0tuTdkTqr4YWSvcLM',3,1,1,1,1,1,0,0,0,0,0,0);
 INSERT INTO "User" ("id","email","phoneNumber","password","firstName","lastName","username","gender","avatarUrl","bio","points","streakCount","isGuest","isAdmin","isBanned","location","appearance","soundAlerts","hapticFeedback","music","allNotifications","inAppNotifications","doNotDisturb","reminderMorning","reminderAfternoon","reminderEvening","reminderCustomTime","createdAt","updatedAt","fcmToken","bibleQuizLevel","pushDirectMessages","pushCommunityPosts","pushCommunityForum","pushConnectionRequests","pushConnectionAccepted","autoScroll","devotionPoints","dailyBreadPoints","audioReelPoints","videoReelPoints","quizPoints") VALUES('user-1','john@example.com','+15550101','ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f','John','Doe','johndoe','Male','https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&h=150&q=80','Just a follower of Christ seeking truth.',150,5,0,1,0,'Dallas, TX','system',1,1,1,1,1,0,0,0,0,NULL,'2026-01-01T00:00:00.000Z','2026-07-14T16:16:47.415+00:00','dECLNfxZTcmlGIEptvh8nf:APA91bG3QJNC_NuJR_Iz5JVgA6JnqLQScTr08IbuNsgGLPJGyVthyNUAZnargAOQ1CqZV63ZexPWe_PIkV4IF1YeVSYc-FdvEXTmFnEEb3s1Q35SxPFQtng',1,1,1,1,1,1,0,0,0,0,0,0);
 INSERT INTO "User" ("id","email","phoneNumber","password","firstName","lastName","username","gender","avatarUrl","bio","points","streakCount","isGuest","isAdmin","isBanned","location","appearance","soundAlerts","hapticFeedback","music","allNotifications","inAppNotifications","doNotDisturb","reminderMorning","reminderAfternoon","reminderEvening","reminderCustomTime","createdAt","updatedAt","fcmToken","bibleQuizLevel","pushDirectMessages","pushCommunityPosts","pushCommunityForum","pushConnectionRequests","pushConnectionAccepted","autoScroll","devotionPoints","dailyBreadPoints","audioReelPoints","videoReelPoints","quizPoints") VALUES('user-2','jane@example.com','+15550102','ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f','Jane','Smith','janesmith','Female','https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=150&h=150&q=80','Worship leader and bible study coordinator.',320,12,0,0,0,'Austin, TX','system',1,1,1,1,1,0,0,0,0,NULL,'2026-01-02T00:00:00.000Z','2026-01-02T00:00:00.000Z',NULL,1,1,1,1,1,1,0,0,0,0,0,0);
 INSERT INTO "User" ("id","email","phoneNumber","password","firstName","lastName","username","gender","avatarUrl","bio","points","streakCount","isGuest","isAdmin","isBanned","location","appearance","soundAlerts","hapticFeedback","music","allNotifications","inAppNotifications","doNotDisturb","reminderMorning","reminderAfternoon","reminderEvening","reminderCustomTime","createdAt","updatedAt","fcmToken","bibleQuizLevel","pushDirectMessages","pushCommunityPosts","pushCommunityForum","pushConnectionRequests","pushConnectionAccepted","autoScroll","devotionPoints","dailyBreadPoints","audioReelPoints","videoReelPoints","quizPoints") VALUES('u100','alice@explore.com',NULL,'945da964d78e54ee22f509479627a302:b128d54acef1052c3ecda58e08962f25ddc5ac0346b73703f2048f84e32fe892','Alice','Wonder','alicew','Female','https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=150&h=150&q=80','Lover of Christ.',100,2,0,0,0,'New York','system',1,1,1,1,1,0,0,0,0,NULL,'2026-06-05 15:33:56','2026-06-05 15:33:56',NULL,1,1,1,1,1,1,0,0,0,0,0,0);
 INSERT INTO "User" ("id","email","phoneNumber","password","firstName","lastName","username","gender","avatarUrl","bio","points","streakCount","isGuest","isAdmin","isBanned","location","appearance","soundAlerts","hapticFeedback","music","allNotifications","inAppNotifications","doNotDisturb","reminderMorning","reminderAfternoon","reminderEvening","reminderCustomTime","createdAt","updatedAt","fcmToken","bibleQuizLevel","pushDirectMessages","pushCommunityPosts","pushCommunityForum","pushConnectionRequests","pushConnectionAccepted","autoScroll","devotionPoints","dailyBreadPoints","audioReelPoints","videoReelPoints","quizPoints") VALUES('u101','bob@explore.com',NULL,'945da964d78e54ee22f509479627a302:b128d54acef1052c3ecda58e08962f25ddc5ac0346b73703f2048f84e32fe892','Bob','Builder','bobb','Male','https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=150&h=150&q=80','Seeking truth.',200,5,0,0,0,'Chicago','system',1,1,1,1,1,0,0,0,0,NULL,'2026-06-05 15:33:56','2026-06-05 15:33:56',NULL,1,1,1,1,1,1,0,0,0,0,0,0);
 INSERT INTO "User" ("id","email","phoneNumber","password","firstName","lastName","username","gender","avatarUrl","bio","points","streakCount","isGuest","isAdmin","isBanned","location","appearance","soundAlerts","hapticFeedback","music","allNotifications","inAppNotifications","doNotDisturb","reminderMorning","reminderAfternoon","reminderEvening","reminderCustomTime","createdAt","updatedAt","fcmToken","bibleQuizLevel","pushDirectMessages","pushCommunityPosts","pushCommunityForum","pushConnectionRequests","pushConnectionAccepted","autoScroll","devotionPoints","dailyBreadPoints","audioReelPoints","videoReelPoints","quizPoints") VALUES('u102','charlie@explore.com',NULL,'945da964d78e54ee22f509479627a302:b128d54acef1052c3ecda58e08962f25ddc5ac0346b73703f2048f84e32fe892','Charlie','Chaplin','charliec','Male','https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?auto=format&fit=crop&w=150&h=150&q=80','Spreading joy.',50,1,0,0,0,'LA','system',1,1,1,1,1,0,0,0,0,NULL,'2026-06-05 15:33:56','2026-06-05 15:33:56',NULL,1,1,1,1,1,1,0,0,0,0,0,0);
-CREATE TABLE IF NOT EXISTS "Book" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "title" TEXT NOT NULL,
-    "author" TEXT NOT NULL,
-    "description" TEXT,
-    "imageUrl" TEXT,
-    "downloadUrl" TEXT,
-    "topic" TEXT,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL
-);
 INSERT INTO "Book" ("id","title","author","description","imageUrl","downloadUrl","topic","createdAt","updatedAt") VALUES('b1','GROWING IN THE KNOWLEDGE OF JESUS CHRIST','Mark A. Copeland','This e-booklet is well-suited to established Christians and covers various aspects of what it means to develop Christ-like character and to live out our lives as Jesus lived his.','https://www.freechristianebooks.org/uploads/2/3/9/6/23963899/published/copeland-2-50.jpg','https://www.freechristianebooks.org/dl-copeland-growing-in-knowledge-of-jc.html','Spiritual Growth','2026-06-05 14:59:05','2026-06-05 14:59:05');
 INSERT INTO "Book" ("id","title","author","description","imageUrl","downloadUrl","topic","createdAt","updatedAt") VALUES('b2','SPIRITUAL GROWTH','Mark A. Copeland','Spiritual Growth is a booklet that is applicable to both new and established Christians and deals with goals and habits for successful growth as well as seldom discussed topics such as spiritual development and self-esteem.','https://www.freechristianebooks.org/uploads/2/3/9/6/23963899/published/copeland-3-50.jpg','https://www.freechristianebooks.org/dl-copeland-spiritual-growth.html','Spiritual Growth','2026-06-05 14:59:05','2026-06-05 14:59:05');
 INSERT INTO "Book" ("id","title","author","description","imageUrl","downloadUrl","topic","createdAt","updatedAt") VALUES('b3','WHICH BIBLE SHOULD I USE?','R. Herbert','This free e-book is specifically designed and written to help you choose and use the best translation for your own needs – for even greater understanding and engagement with the Scriptures!','https://www.freechristianebooks.org/uploads/2/3/9/6/23963899/published/thumb50.jpg','https://www.freechristianebooks.org/dl-translations.html','Bibles','2026-06-05 14:59:05','2026-06-05 14:59:05');
-CREATE TABLE IF NOT EXISTS "MediaLike" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "userId" TEXT NOT NULL,
-    "mediaId" TEXT NOT NULL,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "MediaLike_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT "MediaLike_mediaId_fkey" FOREIGN KEY ("mediaId") REFERENCES "SermonMedia" ("id") ON DELETE CASCADE ON UPDATE CASCADE
-);
-CREATE TABLE IF NOT EXISTS "CommentReaction" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "commentId" TEXT NOT NULL,
-    "userId" TEXT NOT NULL,
-    "emoji" TEXT NOT NULL DEFAULT '👍',
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "CommentReaction_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT "CommentReaction_commentId_fkey" FOREIGN KEY ("commentId") REFERENCES "Comment" ("id") ON DELETE CASCADE ON UPDATE CASCADE
-);
-CREATE TABLE IF NOT EXISTS "PostReport" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "postId" TEXT NOT NULL,
-    "userId" TEXT NOT NULL,
-    "reason" TEXT NOT NULL,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "PostReport_postId_fkey" FOREIGN KEY ("postId") REFERENCES "Post" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT "PostReport_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
-);
-CREATE TABLE IF NOT EXISTS "ChatClear" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "chatId" TEXT NOT NULL,
-    "userId" TEXT NOT NULL,
-    "clearedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "ChatClear_chatId_fkey" FOREIGN KEY ("chatId") REFERENCES "DirectChat" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT "ChatClear_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
-);
-CREATE TABLE IF NOT EXISTS "Affirmation" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "feeling" TEXT,
-    "text" TEXT NOT NULL,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
 INSERT INTO "Affirmation" ("id","feeling","text","createdAt") VALUES('general-1',NULL,'God loves me, and I know it','2026-07-14 14:24:01');
 INSERT INTO "Affirmation" ("id","feeling","text","createdAt") VALUES('general-2',NULL,'The Lord is my shepherd, I lack nothing. (Psalm 23:1)','2026-07-14 14:24:01');
 INSERT INTO "Affirmation" ("id","feeling","text","createdAt") VALUES('general-3',NULL,'I can do all things through Christ who strengthens me. (Philippians 4:13)','2026-07-14 14:24:01');
@@ -886,134 +411,13 @@ INSERT INTO "Affirmation" ("id","feeling","text","createdAt") VALUES('blessed-3'
 INSERT INTO "Affirmation" ("id","feeling","text","createdAt") VALUES('joyful-1','Joyful','The joy of the Lord is your strength. (Nehemiah 8:10)','2026-07-14 14:24:01');
 INSERT INTO "Affirmation" ("id","feeling","text","createdAt") VALUES('joyful-2','Joyful','Though you have not seen him, you love him; and even though you do not see him now, you believe in him and are filled with an inexpressible and glorious joy. (1 Peter 1:8)','2026-07-14 14:24:01');
 INSERT INTO "Affirmation" ("id","feeling","text","createdAt") VALUES('joyful-3','Joyful','This is the day the Lord has made; let us rejoice and be glad in it. (Psalm 118:24)','2026-07-14 14:24:01');
-CREATE TABLE IF NOT EXISTS "Subscription" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "userId" TEXT NOT NULL,
-    "platform" TEXT NOT NULL,
-    "status" TEXT NOT NULL DEFAULT 'active',
-    "productId" TEXT NOT NULL,
-    "expiresAt" DATETIME,
-    "originalTxId" TEXT,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL,
-    CONSTRAINT "Subscription_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
-);
-CREATE TABLE IF NOT EXISTS "UserMedia" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "userId" TEXT NOT NULL,
-    "type" TEXT NOT NULL,
-    "url" TEXT NOT NULL,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "UserMedia_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
-);
-CREATE TABLE IF NOT EXISTS "CommunityJoinRequest" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "communityId" TEXT NOT NULL,
-    "userId" TEXT NOT NULL,
-    "status" TEXT NOT NULL DEFAULT 'PENDING',
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "CommunityJoinRequest_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT "CommunityJoinRequest_communityId_fkey" FOREIGN KEY ("communityId") REFERENCES "Community" ("id") ON DELETE CASCADE ON UPDATE CASCADE
-);
-CREATE TABLE IF NOT EXISTS "SavedBook" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "userId" TEXT NOT NULL,
-    "bookId" TEXT NOT NULL,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "SavedBook_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT "SavedBook_bookId_fkey" FOREIGN KEY ("bookId") REFERENCES "Book" ("id") ON DELETE CASCADE ON UPDATE CASCADE
-);
-CREATE TABLE IF NOT EXISTS "CommunityDailyVerse" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "communityId" TEXT NOT NULL,
-    "date" TEXT NOT NULL,
-    "reference" TEXT NOT NULL,
-    "text" TEXT NOT NULL,
-    "explanation" TEXT,
-    "likesCount" INTEGER NOT NULL DEFAULT 0,
-    "sharesCount" INTEGER NOT NULL DEFAULT 0,
-    "commentsCount" INTEGER NOT NULL DEFAULT 0,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "CommunityDailyVerse_communityId_fkey" FOREIGN KEY ("communityId") REFERENCES "Community" ("id") ON DELETE CASCADE ON UPDATE CASCADE
-);
 INSERT INTO "CommunityDailyVerse" ("id","communityId","date","reference","text","explanation","likesCount","sharesCount","commentsCount","createdAt") VALUES('5189ed49-118c-4b5f-b9d9-749a3ab967b9','c2','2026-07-14','Jeremiah 29:11','For I know the plans I have for you, declares the Lord, plans for welfare and not for evil, to give you a future and a hope.','God has a purposeful and hopeful plan for our lives.',0,0,0,'2026-07-14T15:04:17.797+00:00');
 INSERT INTO "CommunityDailyVerse" ("id","communityId","date","reference","text","explanation","likesCount","sharesCount","commentsCount","createdAt") VALUES('92708e5c-0c30-4612-bcf9-968c2ecfe068','c3','2026-07-14','Romans 8:28','And we know that for those who love God all things work together for good, for those who are called according to his purpose.','Assurance that God works all things out for our ultimate good.',0,0,0,'2026-07-14T15:04:24.828+00:00');
 INSERT INTO "CommunityDailyVerse" ("id","communityId","date","reference","text","explanation","likesCount","sharesCount","commentsCount","createdAt") VALUES('db598be1-219f-4728-8943-c047ad5e0ce2','c1','2026-07-14','Proverbs 3:5-6','Trust in the Lord with all your heart, and do not lean on your own understanding. In all your ways acknowledge him, and he will make straight your paths.','Encouragement to trust God fully in every aspect of life.',0,0,0,'2026-07-14T15:04:29.001+00:00');
-CREATE TABLE IF NOT EXISTS "CommunityDailyVerseLike" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "userId" TEXT NOT NULL,
-    "verseId" TEXT NOT NULL,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "CommunityDailyVerseLike_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT "CommunityDailyVerseLike_verseId_fkey" FOREIGN KEY ("verseId") REFERENCES "CommunityDailyVerse" ("id") ON DELETE CASCADE ON UPDATE CASCADE
-);
-CREATE TABLE IF NOT EXISTS "BookComment" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "content" TEXT NOT NULL,
-    "bookId" TEXT NOT NULL,
-    "userId" TEXT NOT NULL,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "BookComment_bookId_fkey" FOREIGN KEY ("bookId") REFERENCES "Book" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT "BookComment_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
-);
-CREATE TABLE IF NOT EXISTS "BookReaction" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "bookId" TEXT NOT NULL,
-    "userId" TEXT NOT NULL,
-    "emoji" TEXT NOT NULL,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "BookReaction_bookId_fkey" FOREIGN KEY ("bookId") REFERENCES "Book" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT "BookReaction_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
-);
-CREATE TABLE IF NOT EXISTS "Comment" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "postId" TEXT NOT NULL,
-    "userId" TEXT NOT NULL,
-    "parentId" TEXT,
-    "text" TEXT NOT NULL,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "Comment_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT "Comment_postId_fkey" FOREIGN KEY ("postId") REFERENCES "Post" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT "Comment_parentId_fkey" FOREIGN KEY ("parentId") REFERENCES "Comment" ("id") ON DELETE CASCADE ON UPDATE CASCADE
-);
-CREATE TABLE IF NOT EXISTS "Community" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "name" TEXT NOT NULL,
-    "description" TEXT NOT NULL,
-    "image" TEXT,
-    "guidelines" TEXT,
-    "isPrivate" BOOLEAN NOT NULL DEFAULT false,
-    "isForumDisabledGlobally" BOOLEAN NOT NULL DEFAULT false,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "creatorId" TEXT,
-    CONSTRAINT "Community_creatorId_fkey" FOREIGN KEY ("creatorId") REFERENCES "User" ("id") ON DELETE SET NULL ON UPDATE CASCADE
-);
 INSERT INTO "Community" ("id","name","description","image","guidelines","isPrivate","isForumDisabledGlobally","createdAt","creatorId") VALUES('c1','Prayer Warriors','A community dedicated to intercessory prayer and spiritual growth.','https://images.unsplash.com/photo-1544427920-c49ccfb85579?auto=format&fit=crop&w=150&h=150&q=80','Respect everyone.',0,0,'2026-06-05 15:03:55',NULL);
 INSERT INTO "Community" ("id","name","description","image","guidelines","isPrivate","isForumDisabledGlobally","createdAt","creatorId") VALUES('c2','Bible Study Fellowship','Weekly deep dives into scripture.','https://images.unsplash.com/photo-1490730141103-6cac27aaab94?auto=format&fit=crop&w=150&h=150&q=80','Stay on topic.',0,0,'2026-06-05 15:03:55',NULL);
 INSERT INTO "Community" ("id","name","description","image","guidelines","isPrivate","isForumDisabledGlobally","createdAt","creatorId") VALUES('c3','Youth Ministry','Empowering the next generation.','https://images.unsplash.com/photo-1529156069898-49953e39b3ac?auto=format&fit=crop&w=150&h=150&q=80','Be kind.',0,0,'2026-06-05 15:03:55',NULL);
-CREATE TABLE IF NOT EXISTS "CommunityMember" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "communityId" TEXT NOT NULL,
-    "userId" TEXT NOT NULL,
-    "role" TEXT NOT NULL DEFAULT 'MEMBER',
-    "isSuspended" BOOLEAN NOT NULL DEFAULT false,
-    "canPostForum" BOOLEAN NOT NULL DEFAULT true,
-    "joinedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "CommunityMember_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT "CommunityMember_communityId_fkey" FOREIGN KEY ("communityId") REFERENCES "Community" ("id") ON DELETE CASCADE ON UPDATE CASCADE
-);
 INSERT INTO "CommunityMember" ("id","communityId","userId","role","isSuspended","canPostForum","joinedAt") VALUES('397aa502-9f89-477f-9595-c24ccf9dbdb7','c3','user-1','MEMBER',0,1,'2026-07-14T15:35:23.395+00:00');
-CREATE TABLE IF NOT EXISTS "SermonMedia" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "title" TEXT NOT NULL,
-    "author" TEXT NOT NULL,
-    "mediaUrl" TEXT NOT NULL,
-    "imageUrl" TEXT NOT NULL,
-    "type" TEXT NOT NULL,
-    "duration" TEXT NOT NULL,
-    "category" TEXT NOT NULL,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
 INSERT INTO "SermonMedia" ("id","title","author","mediaUrl","imageUrl","type","duration","category","createdAt") VALUES('977aacc3-404f-4afa-a489-7a49ab9f18d6','When God Backs a Man (Short Clip)','Apostle Joshua Selman','https://vz-cea98c59-23c.b-cdn.net/c309129c-27b6-4e43-8254-62a15c77c5ee/1280x720/video.m3u8','https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=600&h=1067&fit=crop','VIDEO','0:58','power','2026-07-02 18:33:56');
 INSERT INTO "SermonMedia" ("id","title","author","mediaUrl","imageUrl","type","duration","category","createdAt") VALUES('6afca5e7-a614-4be9-a564-8a47e4cbf727','The Secret of High Honors','Bishop David Oyedepo','http://qthttp.apple.com.edgesuite.net/1010qwoeiuryfg/sl.m3u8','https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=600&h=1067&fit=crop','VIDEO','1:22','honor','2026-07-02 18:26:56');
 INSERT INTO "SermonMedia" ("id","title","author","mediaUrl","imageUrl","type","duration","category","createdAt") VALUES('f214937e-8506-4c9e-8fb8-4c440c8ffab3','The Danger of a Prayerless Week','Pastor E.A. Adeboye','http://qthttp.apple.com.edgesuite.net/1010qwoeiuryfg/sl.m3u8','https://images.unsplash.com/photo-1518099074172-2e47ee6cfdc0?w=600&h=1067&fit=crop','VIDEO','0:45','prayer','2026-07-02 18:20:56');
@@ -1169,86 +573,3 @@ INSERT INTO "SermonMedia" ("id","title","author","mediaUrl","imageUrl","type","d
 INSERT INTO "SermonMedia" ("id","title","author","mediaUrl","imageUrl","type","duration","category","createdAt") VALUES('a41019b3-82a1-4646-8bd2-1db024e4186e','LITTLE FOXES: THE KILLERS OF GREAT DESTINIES (Koinonia Abuja)','Apostle Joshua Selman','https://naijasermons.com.ng/wp-content/uploads/2025/04/LITTLE_FOXES_THE_KILLERS_OF_GREAT_DESTINIES_Songs_of_Solomon_215.mp3','https://images.unsplash.com/photo-1478737270239-2f02b77fc618?w=600','AUDIO','1:53:10','wisdom','2026-06-29 12:38:56');
 INSERT INTO "SermonMedia" ("id","title","author","mediaUrl","imageUrl","type","duration","category","createdAt") VALUES('1f8ee256-3994-42b4-a624-980217fa1667','RAISED UP WITH CHRIST (Koinonia Abuja)','Apostle Joshua Selman','https://naijasermons.com.ng/wp-content/uploads/2025/04/Raised_Up_With_Christ_The_Resurrection_Easter_Sunday_with_Apostle.mp3','https://images.unsplash.com/photo-1494232410401-ad00d5433cfa?w=600','AUDIO','1:44:25','grace','2026-06-29 11:38:56');
 INSERT INTO "SermonMedia" ("id","title","author","mediaUrl","imageUrl","type","duration","category","createdAt") VALUES('1b4bf959-bc0d-4144-baf8-1acb8dc6207c','Ever Present Help 2025','Apostle Joshua Selman','https://elohimtunes.com/wp-content/uploads/2021/05/Ever-Present-Help-__-Apostle-Joshua-SelmanMP3_128K.mp3','https://images.unsplash.com/photo-1511632765486-a01980e01a18?w=600','AUDIO','1:28:00','faith','2026-06-29 10:38:56');
-CREATE TABLE IF NOT EXISTS "CommunityMessage" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "communityId" TEXT NOT NULL,
-    "senderId" TEXT NOT NULL,
-    "text" TEXT NOT NULL,
-    "imageUrl" TEXT,
-    "videoUrl" TEXT,
-    "videoThumbnail" TEXT,
-    "audioUrl" TEXT,
-    "audioThumbnail" TEXT,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, "likesCount" INTEGER NOT NULL DEFAULT 0, "commentsCount" INTEGER NOT NULL DEFAULT 0, "sharesCount" INTEGER NOT NULL DEFAULT 0, "bookmarksCount" INTEGER NOT NULL DEFAULT 0,
-    CONSTRAINT "CommunityMessage_senderId_fkey" FOREIGN KEY ("senderId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT "CommunityMessage_communityId_fkey" FOREIGN KEY ("communityId") REFERENCES "Community" ("id") ON DELETE CASCADE ON UPDATE CASCADE
-);
-CREATE TABLE IF NOT EXISTS "CommunityMessageLike" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "userId" TEXT NOT NULL,
-    "messageId" TEXT NOT NULL,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "CommunityMessageLike_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT "CommunityMessageLike_messageId_fkey" FOREIGN KEY ("messageId") REFERENCES "CommunityMessage" ("id") ON DELETE CASCADE ON UPDATE CASCADE
-);
-CREATE TABLE IF NOT EXISTS "CommunityMessageBookmark" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "userId" TEXT NOT NULL,
-    "messageId" TEXT NOT NULL,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "CommunityMessageBookmark_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT "CommunityMessageBookmark_messageId_fkey" FOREIGN KEY ("messageId") REFERENCES "CommunityMessage" ("id") ON DELETE CASCADE ON UPDATE CASCADE
-);
-CREATE TABLE IF NOT EXISTS "CommunityMessageComment" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "userId" TEXT NOT NULL,
-    "messageId" TEXT NOT NULL,
-    "text" TEXT NOT NULL,
-    "parentId" TEXT,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, "likesCount" INTEGER NOT NULL DEFAULT 0,
-    CONSTRAINT "CommunityMessageComment_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT "CommunityMessageComment_messageId_fkey" FOREIGN KEY ("messageId") REFERENCES "CommunityMessage" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT "CommunityMessageComment_parentId_fkey" FOREIGN KEY ("parentId") REFERENCES "CommunityMessageComment" ("id") ON DELETE CASCADE ON UPDATE CASCADE
-);
-CREATE TABLE IF NOT EXISTS "CommunityMessageReaction" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "userId" TEXT NOT NULL,
-    "messageId" TEXT NOT NULL,
-    "emoji" TEXT NOT NULL,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "CommunityMessageReaction_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT "CommunityMessageReaction_messageId_fkey" FOREIGN KEY ("messageId") REFERENCES "CommunityMessage" ("id") ON DELETE CASCADE ON UPDATE CASCADE
-);
-CREATE TABLE IF NOT EXISTS "CommunityMessageCommentLike" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "userId" TEXT NOT NULL,
-    "commentId" TEXT NOT NULL,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "CommunityMessageCommentLike_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT "CommunityMessageCommentLike_commentId_fkey" FOREIGN KEY ("commentId") REFERENCES "CommunityMessageComment" ("id") ON DELETE CASCADE ON UPDATE CASCADE
-);
-DELETE FROM sqlite_sequence;
-INSERT INTO "sqlite_sequence" ("name","seq") VALUES('d1_migrations',31);
-CREATE UNIQUE INDEX "UserFeeling_userId_key" ON "UserFeeling"("userId");
-CREATE UNIQUE INDEX "DailyBread_date_key" ON "DailyBread"("date");
-CREATE UNIQUE INDEX "Challenge_inviteCode_key" ON "Challenge"("inviteCode");
-CREATE UNIQUE INDEX "Badge_name_key" ON "Badge"("name");
-CREATE UNIQUE INDEX "GameSettings_gameType_key" ON "GameSettings"("gameType");
-CREATE UNIQUE INDEX "DailyVerseStat_date_key" ON "DailyVerseStat"("date");
-CREATE UNIQUE INDEX "DailyVerseLike_userId_date_key" ON "DailyVerseLike"("userId", "date");
-CREATE UNIQUE INDEX "AppFeature_key_key" ON "AppFeature"("key");
-CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
-CREATE UNIQUE INDEX "User_phoneNumber_key" ON "User"("phoneNumber");
-CREATE UNIQUE INDEX "User_username_key" ON "User"("username");
-CREATE UNIQUE INDEX "MediaLike_userId_mediaId_key" ON "MediaLike"("userId", "mediaId");
-CREATE UNIQUE INDEX "CommentReaction_userId_commentId_key" ON "CommentReaction"("userId", "commentId");
-CREATE UNIQUE INDEX "ChatClear_chatId_userId_key" ON "ChatClear"("chatId", "userId");
-CREATE UNIQUE INDEX "SavedBook_userId_bookId_key" ON "SavedBook"("userId", "bookId");
-CREATE UNIQUE INDEX "CommunityDailyVerse_communityId_date_key" ON "CommunityDailyVerse"("communityId", "date");
-CREATE UNIQUE INDEX "CommunityDailyVerseLike_userId_verseId_key" ON "CommunityDailyVerseLike"("userId", "verseId");
-CREATE UNIQUE INDEX "Community_name_key" ON "Community"("name");
-CREATE UNIQUE INDEX "BookReaction_bookId_userId_emoji_key" ON "BookReaction"("bookId", "userId", "emoji");
-CREATE UNIQUE INDEX "CommunityMessageLike_userId_messageId_key" ON "CommunityMessageLike"("userId", "messageId");
-CREATE UNIQUE INDEX "CommunityMessageBookmark_userId_messageId_key" ON "CommunityMessageBookmark"("userId", "messageId");
-CREATE UNIQUE INDEX "CommunityMessageReaction_userId_messageId_emoji_key" ON "CommunityMessageReaction"("userId", "messageId", "emoji");
-CREATE UNIQUE INDEX "CommunityMessageCommentLike_userId_commentId_key" ON "CommunityMessageCommentLike"("userId", "commentId");
