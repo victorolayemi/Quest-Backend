@@ -23,14 +23,40 @@ books.get("/", async (c) => {
 books.get("/saved", async (c) => {
   const prisma = getPrisma(c.env.DB);
   const userId = c.get("userId");
-  const savedBooks = await prisma.savedBook.findMany({
-    where: { userId },
-    include: {
-      book: true
-    },
-    orderBy: { createdAt: "desc" }
+  const page = parseInt(c.req.query("page") ?? "1", 10);
+  const limit = parseInt(c.req.query("limit") ?? "20", 10);
+  const search = (c.req.query("search") ?? "").trim().toLowerCase();
+
+  const where: any = { userId };
+
+  if (search) {
+    where.book = {
+      OR: [
+        { title: { contains: search } },
+        { author: { contains: search } },
+        { description: { contains: search } },
+      ],
+    };
+  }
+
+  const [savedBooks, total] = await Promise.all([
+    prisma.savedBook.findMany({
+      where,
+      include: { book: true },
+      orderBy: { createdAt: "desc" },
+      skip: (page - 1) * limit,
+      take: limit,
+    }),
+    prisma.savedBook.count({ where }),
+  ]);
+
+  return c.json({
+    data: savedBooks,
+    total,
+    page,
+    limit,
+    hasMore: page * limit < total,
   });
-  return c.json(savedBooks);
 });
 books.get("/:id", async (c) => {
   const prisma = getPrisma(c.env.DB);

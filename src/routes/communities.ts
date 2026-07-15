@@ -181,22 +181,41 @@ communities.post("/", async (c) => {
 communities.get("/messages/saved", async (c) => {
   const userId = c.get("userId");
   const prisma = getPrisma(c.env.DB);
-  
+  const page = parseInt(c.req.query("page") ?? "1", 10);
+  const limit = parseInt(c.req.query("limit") ?? "20", 10);
+  const search = (c.req.query("search") ?? "").trim().toLowerCase();
+
   try {
-    const savedMessages = await prisma.communityMessageBookmark.findMany({
-      where: { userId },
-      include: {
-        message: {
-          include: {
-            sender: {
-              select: { id: true, username: true, firstName: true, lastName: true, avatarUrl: true }
+    const where: any = { userId };
+
+    if (search) {
+      where.message = {
+        OR: [
+          { title: { contains: search } },
+          { text: { contains: search } },
+        ],
+      };
+    }
+
+    const [savedMessages, total] = await Promise.all([
+      prisma.communityMessageBookmark.findMany({
+        where,
+        include: {
+          message: {
+            include: {
+              sender: {
+                select: { id: true, username: true, firstName: true, lastName: true, avatarUrl: true }
+              }
             }
           }
-        }
-      },
-      orderBy: { createdAt: "desc" }
-    });
-    
+        },
+        orderBy: { createdAt: "desc" },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      prisma.communityMessageBookmark.count({ where }),
+    ]);
+
     const formatted = savedMessages.map((bm: any) => ({
       id: bm.message.id,
       title: bm.message.title,
@@ -209,12 +228,19 @@ communities.get("/messages/saved", async (c) => {
         fullName: bm.message.sender?.firstName ? `${bm.message.sender.firstName} ${bm.message.sender.lastName || ''}`.trim() : null
       }
     }));
-    
-    return c.json(formatted);
+
+    return c.json({
+      data: formatted,
+      total,
+      page,
+      limit,
+      hasMore: page * limit < total,
+    });
   } catch (error) {
     return c.json({ error: "Failed to fetch saved messages" }, 500);
   }
 });
+
 
 communities.get("/:id", async (c) => {
   const id = c.req.param("id");
