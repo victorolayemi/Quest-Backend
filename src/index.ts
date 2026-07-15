@@ -25,7 +25,7 @@ import communityAdmin from './routes/communityAdmin';
 import gamesAdmin from './routes/gamesAdmin';
 import notifications from './routes/notifications';
 import media from './routes/media';
-import notesRouter from './routes/journals';
+import notesRouter from './routes/notes';
 import subscriptions from './routes/subscriptions';
 import gamificationAdmin from './routes/gamificationAdmin';
 import badges from './routes/badges';

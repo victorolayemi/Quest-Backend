@@ -189,7 +189,7 @@ communities.get("/messages/saved", async (c) => {
         message: {
           include: {
             sender: {
-              select: { id: true, username: true, fullName: true, avatarUrl: true }
+              select: { id: true, username: true, firstName: true, lastName: true, avatarUrl: true }
             }
           }
         }
@@ -201,9 +201,13 @@ communities.get("/messages/saved", async (c) => {
       id: bm.message.id,
       title: bm.message.title,
       text: bm.message.text,
+      imageUrl: bm.message.imageUrl,
       createdAt: bm.message.createdAt,
       likesCount: bm.message.likesCount,
-      sender: bm.message.sender
+      sender: {
+        ...bm.message.sender,
+        fullName: bm.message.sender?.firstName ? `${bm.message.sender.firstName} ${bm.message.sender.lastName || ''}`.trim() : null
+      }
     }));
     
     return c.json(formatted);

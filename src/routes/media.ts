@@ -548,10 +548,11 @@ media.post("/upload", authMiddleware, async (c) => {
   const title = formData.get("title") || (file as File).name;
   const type = formData.get("type") || ((file as File).type.startsWith("video/") ? "video" : "audio");
   const isEdit = formData.get("isEdit") === "true";
+  const isReel = formData.get("isReel") === "true";
   if (!file) {
     return c.json({ error: 'No file provided in form-data key "file"' }, 400);
   }
-  if (!isEdit) {
+  if (isReel && !isEdit) {
     const activeSubscription = await prisma.subscription.findFirst({
       where: {
         userId,
@@ -587,7 +588,7 @@ media.post("/upload", authMiddleware, async (c) => {
   }
   const origin = new URL(c.req.url).origin;
   const fileUrl = `${origin}/api/v1/media/download/${fileKey}`;
-  if (!isEdit) {
+  if (isReel && !isEdit) {
     await prisma.userMedia.create({
       data: {
         userId,
