@@ -516,7 +516,7 @@ media.get("/audio", async (c) => {
     title: a.title,
     author: `${a.user.firstName} ${a.user.lastName}`,
     mediaUrl: a.mediaUrl,
-    imageUrl: "",
+    imageUrl: a.imageUrl || "",
     type: "AUDIO",
     duration: "00:00",
     category: "Reel",
