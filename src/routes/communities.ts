@@ -136,21 +136,15 @@ communities.get("/recommended", async (c) => {
 communities.post("/", async (c) => {
   const userId = c.get("userId");
   const prisma = getPrisma(c.env.DB);
-  const feature = await prisma.appFeature.findUnique({
-    where: { key: "community_creation_requires_subscription" }
-  });
-  const requiresSub = feature ? feature.isEnabled : true;
-  if (requiresSub) {
-    const activeSubscription = await prisma.subscription.findFirst({
-      where: {
-        userId,
-        status: "active",
-        expiresAt: { gt: /* @__PURE__ */ new Date() }
-      }
-    });
-    if (!activeSubscription) {
-      return c.json({ error: "You must be subscribed to create a community." }, 403);
+  const activeSubscription = await prisma.subscription.findFirst({
+    where: {
+      userId,
+      status: "active",
+      expiresAt: { gt: /* @__PURE__ */ new Date() }
     }
+  });
+  if (!activeSubscription) {
+    return c.json({ error: "You must be subscribed to create a community." }, 403);
   }
   const body = await c.req.json() as any;
   const { name: name2, description, image, guidelines, isPrivate = false } = body;
