@@ -1,0 +1,1 @@
+ALTER TABLE UserMedia ADD COLUMN imageUrl TEXT;

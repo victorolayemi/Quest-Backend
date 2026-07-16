@@ -140,7 +140,20 @@ contentAdmin.delete("/books/:id", async (c) => {
 contentAdmin.get("/media", async (c) => {
   const prisma = getPrisma(c.env.DB);
   const media2 = await prisma.sermonMedia.findMany({ orderBy: { createdAt: "desc" } });
-  return c.json({ media: media2 });
+  const userMedia = await prisma.userMedia.findMany({ include: { user: true }, orderBy: { createdAt: "desc" } });
+  const uMapped = userMedia.map(m => ({
+    id: m.id,
+    title: m.title,
+    author: m.user ? `${m.user.firstName} ${m.user.lastName}` : 'Unknown',
+    mediaUrl: m.mediaUrl,
+    imageUrl: "",
+    type: m.type,
+    duration: "00:00",
+    category: "Reel",
+    createdAt: m.createdAt
+  }));
+  const all = [...media2, ...uMapped].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  return c.json({ media: all });
 });
 contentAdmin.post("/media", async (c) => {
   const prisma = getPrisma(c.env.DB);
@@ -150,7 +163,16 @@ contentAdmin.post("/media", async (c) => {
 });
 contentAdmin.delete("/media/:id", async (c) => {
   const prisma = getPrisma(c.env.DB);
-  await prisma.sermonMedia.delete({ where: { id: c.req.param("id") } });
+  const id = c.req.param("id");
+  try {
+    await prisma.sermonMedia.delete({ where: { id } });
+  } catch (e) {
+    try {
+      await prisma.userMedia.delete({ where: { id } });
+    } catch (e2) {
+      // Ignore if not found
+    }
+  }
   return c.json({ success: true });
 });
 

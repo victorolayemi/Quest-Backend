@@ -27,15 +27,49 @@ feed.get("/", async (c) => {
     include: { _count: { select: { mediaLikes: true } } },
     take: 4
   });
+  const uVideoItems = await prisma.userMedia.findMany({
+    where: { type: "video" },
+    include: { user: { select: { firstName: true, lastName: true } } },
+    orderBy: { createdAt: "desc" },
+    take: 4
+  });
   const audioItems = await prisma.sermonMedia.findMany({
     where: { type: "AUDIO" },
     include: { _count: { select: { mediaLikes: true } } },
     take: 4
   });
-  const mediaItems = [...videoItems, ...audioItems].map((item) => ({
-    ...item,
-    likes: item._count.mediaLikes
-  }));
+  const uAudioItems = await prisma.userMedia.findMany({
+    where: { type: "audio" },
+    include: { user: { select: { firstName: true, lastName: true } } },
+    orderBy: { createdAt: "desc" },
+    take: 4
+  });
+  const mediaItems = [
+    ...videoItems.map((item) => ({ ...item, likes: item._count.mediaLikes })),
+    ...uVideoItems.map((item) => ({
+      id: item.id,
+      title: item.title,
+      author: `${item.user.firstName} ${item.user.lastName}`,
+      mediaUrl: item.mediaUrl,
+      imageUrl: item.imageUrl ?? "",
+      type: "VIDEO",
+      duration: "00:00",
+      category: "Reel",
+      likes: 0
+    })),
+    ...audioItems.map((item) => ({ ...item, likes: item._count.mediaLikes })),
+    ...uAudioItems.map((item) => ({
+      id: item.id,
+      title: item.title,
+      author: `${item.user.firstName} ${item.user.lastName}`,
+      mediaUrl: item.mediaUrl,
+      imageUrl: item.imageUrl ?? "",
+      type: "AUDIO",
+      duration: "00:00",
+      category: "Reel",
+      likes: 0
+    }))
+  ];
   const latestJournal = await prisma.journalEntry.findFirst({
     where: { userId },
     orderBy: { createdAt: "desc" }

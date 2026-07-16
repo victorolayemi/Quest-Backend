@@ -775,6 +775,7 @@ model UserMedia {
   userId    String
   title     String
   mediaUrl  String
+  imageUrl  String?
   type      String // "video", "audio"
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
