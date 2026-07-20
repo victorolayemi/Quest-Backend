@@ -16,8 +16,34 @@ contentAdmin.get("/devotions/plans", async (c) => {
 });
 contentAdmin.post("/devotions/plans", async (c) => {
   const prisma = getPrisma(c.env.DB);
-  const body = await c.req.json();
-  const plan = await prisma.devotionPlan.create({ data: body });
+  let data: any = {};
+  const contentType = c.req.header("content-type") || "";
+  
+  if (contentType.includes("multipart/form-data")) {
+    const formData = await c.req.formData();
+    data = {
+      title: formData.get("title") as string,
+      description: formData.get("description") as string,
+      authorName: formData.get("authorName") as string,
+      authorHandle: formData.get("authorHandle") as string,
+      tag: formData.get("tag") as string,
+      durationDays: parseInt(formData.get("durationDays") as string, 10) || 1,
+    };
+    const file = formData.get("image") as unknown as File;
+    if (file && file.size > 0 && c.env.MEDIA_BUCKET) {
+      const fileKey = `devotions/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, "_")}`;
+      const fileBuffer = await file.arrayBuffer();
+      await c.env.MEDIA_BUCKET.put(fileKey, fileBuffer, {
+        httpMetadata: { contentType: file.type }
+      });
+      const origin = new URL(c.req.url).origin;
+      data.image = `${origin}/api/v1/media/download/${fileKey}`;
+    }
+  } else {
+    data = await c.req.json();
+  }
+
+  const plan = await prisma.devotionPlan.create({ data });
   return c.json({ plan });
 });
 contentAdmin.delete("/devotions/plans/:id", async (c) => {
@@ -27,12 +53,38 @@ contentAdmin.delete("/devotions/plans/:id", async (c) => {
 });
 contentAdmin.put("/devotions/plans/:id", async (c) => {
   const prisma = getPrisma(c.env.DB);
-  const body = await c.req.json();
-  // Strip computed/readonly fields that Prisma rejects
-  const { _count, id, createdAt, days, ...data } = body;
+  let updateData: any = {};
+  const contentType = c.req.header("content-type") || "";
+
+  if (contentType.includes("multipart/form-data")) {
+    const formData = await c.req.formData();
+    updateData = {
+      title: formData.get("title") as string,
+      description: formData.get("description") as string,
+      authorName: formData.get("authorName") as string,
+      authorHandle: formData.get("authorHandle") as string,
+      tag: formData.get("tag") as string,
+      durationDays: parseInt(formData.get("durationDays") as string, 10) || 1,
+    };
+    const file = formData.get("image") as unknown as File;
+    if (file && file.size > 0 && c.env.MEDIA_BUCKET) {
+      const fileKey = `devotions/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, "_")}`;
+      const fileBuffer = await file.arrayBuffer();
+      await c.env.MEDIA_BUCKET.put(fileKey, fileBuffer, {
+        httpMetadata: { contentType: file.type }
+      });
+      const origin = new URL(c.req.url).origin;
+      updateData.image = `${origin}/api/v1/media/download/${fileKey}`;
+    }
+  } else {
+    const body = await c.req.json();
+    const { _count, id, createdAt, days, ...data } = body;
+    updateData = data;
+  }
+
   const plan = await prisma.devotionPlan.update({
     where: { id: c.req.param("id") },
-    data
+    data: updateData
   });
   return c.json({ plan });
 });

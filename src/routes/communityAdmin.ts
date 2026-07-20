@@ -160,9 +160,67 @@ communityAdmin.get("/:id/posts", async (c) => {
   });
   return c.json({ posts });
 });
+
+communityAdmin.get("/:id/forum", async (c) => {
+  const prisma = getPrisma(c.env.DB);
+  const forumMessages = await prisma.groupMessage.findMany({
+    where: { communityId: c.req.param("id") },
+    include: {
+      sender: { select: { firstName: true, lastName: true, username: true, avatarUrl: true } }
+    },
+    orderBy: { createdAt: "desc" }
+  });
+  return c.json({ forum: forumMessages });
+});
 communityAdmin.delete("/posts/:id", async (c) => {
   const prisma = getPrisma(c.env.DB);
   await prisma.post.delete({ where: { id: c.req.param("id") } });
+  return c.json({ success: true });
+});
+
+communityAdmin.get("/posts/:id", async (c) => {
+  const prisma = getPrisma(c.env.DB);
+  const post = await prisma.post.findUnique({
+    where: { id: c.req.param("id") },
+    include: {
+      user: { select: { firstName: true, lastName: true, username: true, avatarUrl: true } },
+      _count: { select: { comments: true, reactions: true } },
+      comments: {
+        include: {
+          user: { select: { firstName: true, lastName: true, username: true, avatarUrl: true } }
+        },
+        orderBy: { createdAt: 'desc' }
+      }
+    }
+  });
+  return c.json({ post });
+});
+
+communityAdmin.delete("/posts/comments/:id", async (c) => {
+  const prisma = getPrisma(c.env.DB);
+  const { reason } = await c.req.json();
+  const commentId = c.req.param("id");
+
+  const comment = await prisma.comment.findUnique({ where: { id: commentId } });
+  if (!comment) return c.json({ error: "Not found" }, 404);
+
+  await prisma.comment.delete({ where: { id: commentId } });
+
+  await prisma.notification.create({
+    data: {
+      userId: comment.userId,
+      title: "Comment Deleted",
+      message: `Your comment on a community post was deleted by an admin. Reason: ${reason}`,
+      type: "SYSTEM"
+    }
+  });
+
+  return c.json({ success: true });
+});
+
+communityAdmin.delete("/forum/messages/:id", async (c) => {
+  const prisma = getPrisma(c.env.DB);
+  await prisma.groupMessage.delete({ where: { id: c.req.param("id") } });
   return c.json({ success: true });
 });
 communityAdmin.delete("/comments/:id", async (c) => {
@@ -184,6 +242,45 @@ communityAdmin.get("/:id/messages", async (c) => {
 communityAdmin.delete("/messages/:id", async (c) => {
   const prisma = getPrisma(c.env.DB);
   await prisma.communityMessage.delete({ where: { id: c.req.param("id") } });
+  return c.json({ success: true });
+});
+
+communityAdmin.get("/messages/:id", async (c) => {
+  const prisma = getPrisma(c.env.DB);
+  const message = await prisma.communityMessage.findUnique({
+    where: { id: c.req.param("id") },
+    include: {
+      sender: { select: { firstName: true, lastName: true, username: true, avatarUrl: true } },
+      comments: {
+        include: {
+          user: { select: { firstName: true, lastName: true, username: true, avatarUrl: true } }
+        },
+        orderBy: { createdAt: 'desc' }
+      }
+    }
+  });
+  return c.json({ message });
+});
+
+communityAdmin.delete("/messages/comments/:id", async (c) => {
+  const prisma = getPrisma(c.env.DB);
+  const { reason } = await c.req.json();
+  const commentId = c.req.param("id");
+
+  const comment = await prisma.communityMessageComment.findUnique({ where: { id: commentId } });
+  if (!comment) return c.json({ error: "Not found" }, 404);
+
+  await prisma.communityMessageComment.delete({ where: { id: commentId } });
+
+  await prisma.notification.create({
+    data: {
+      userId: comment.userId,
+      title: "Comment Deleted",
+      message: `Your comment on a community message was deleted by an admin. Reason: ${reason}`,
+      type: "SYSTEM"
+    }
+  });
+
   return c.json({ success: true });
 });
 communityAdmin.get("/:id/events", async (c) => {
