@@ -128,8 +128,116 @@ contentAdmin.get("/books", async (c) => {
 });
 contentAdmin.post("/books", async (c) => {
   const prisma = getPrisma(c.env.DB);
-  const body = await c.req.json();
-  const book = await prisma.book.create({ data: body });
+  let title, author, description, topic, downloadUrl, imageUrl;
+
+  try {
+    const formData = await c.req.formData();
+    
+    title = (formData.get("title") as string) || "Untitled";
+    author = (formData.get("author") as string) || "Unknown";
+    description = (formData.get("description") as string) || "";
+    topic = (formData.get("topic") as string) || "General";
+    
+    const file = formData.get("file");
+    if (file && (file as File).size > 0 && c.env.MEDIA_BUCKET) {
+      const fileKey = `uploads/books-${Date.now()}-${(file as File).name}`;
+      const fileBuffer = await (file as File).arrayBuffer();
+      await c.env.MEDIA_BUCKET.put(fileKey, fileBuffer, {
+        httpMetadata: { contentType: (file as File).type },
+      });
+      const origin = new URL(c.req.url).origin;
+      downloadUrl = `${origin}/api/v1/media/download/${fileKey}`;
+    }
+
+    const thumbnail = formData.get("thumbnail");
+    if (thumbnail && (thumbnail as File).size > 0 && c.env.MEDIA_BUCKET) {
+      const thumbKey = `uploads/books-thumb-${Date.now()}-${(thumbnail as File).name}`;
+      const thumbBuffer = await (thumbnail as File).arrayBuffer();
+      await c.env.MEDIA_BUCKET.put(thumbKey, thumbBuffer, {
+        httpMetadata: { contentType: (thumbnail as File).type },
+      });
+      const origin = new URL(c.req.url).origin;
+      imageUrl = `${origin}/api/v1/media/download/${thumbKey}`;
+    }
+  } catch (e) {
+    const body = await c.req.json();
+    title = body.title;
+    author = body.author || "Unknown";
+    description = body.description || "";
+    topic = body.topic || "General";
+    downloadUrl = body.downloadUrl || "";
+    imageUrl = body.imageUrl || "";
+  }
+
+  const book = await prisma.book.create({ 
+    data: {
+      title,
+      author,
+      description,
+      topic,
+      downloadUrl: downloadUrl || "",
+      imageUrl: imageUrl || ""
+    } 
+  });
+  return c.json({ book });
+});
+
+contentAdmin.put("/books/:id", async (c) => {
+  const prisma = getPrisma(c.env.DB);
+  const id = c.req.param("id");
+  let title, author, description, topic, downloadUrl, imageUrl;
+
+  try {
+    const formData = await c.req.formData();
+    
+    title = formData.get("title") as string;
+    author = formData.get("author") as string;
+    description = formData.get("description") as string;
+    topic = formData.get("topic") as string;
+    
+    const file = formData.get("file");
+    if (file && (file as File).size > 0 && c.env.MEDIA_BUCKET) {
+      const fileKey = `uploads/books-${Date.now()}-${(file as File).name}`;
+      const fileBuffer = await (file as File).arrayBuffer();
+      await c.env.MEDIA_BUCKET.put(fileKey, fileBuffer, {
+        httpMetadata: { contentType: (file as File).type },
+      });
+      const origin = new URL(c.req.url).origin;
+      downloadUrl = `${origin}/api/v1/media/download/${fileKey}`;
+    }
+
+    const thumbnail = formData.get("thumbnail");
+    if (thumbnail && (thumbnail as File).size > 0 && c.env.MEDIA_BUCKET) {
+      const thumbKey = `uploads/books-thumb-${Date.now()}-${(thumbnail as File).name}`;
+      const thumbBuffer = await (thumbnail as File).arrayBuffer();
+      await c.env.MEDIA_BUCKET.put(thumbKey, thumbBuffer, {
+        httpMetadata: { contentType: (thumbnail as File).type },
+      });
+      const origin = new URL(c.req.url).origin;
+      imageUrl = `${origin}/api/v1/media/download/${thumbKey}`;
+    }
+  } catch (e) {
+    const body = await c.req.json();
+    title = body.title;
+    author = body.author;
+    description = body.description;
+    topic = body.topic;
+    downloadUrl = body.downloadUrl;
+    imageUrl = body.imageUrl;
+  }
+
+  const updateData: any = {};
+  if (title !== undefined) updateData.title = title;
+  if (author !== undefined) updateData.author = author;
+  if (description !== undefined) updateData.description = description;
+  if (topic !== undefined) updateData.topic = topic;
+  if (downloadUrl !== undefined) updateData.downloadUrl = downloadUrl;
+  if (imageUrl !== undefined) updateData.imageUrl = imageUrl;
+
+  const book = await prisma.book.update({ 
+    where: { id },
+    data: updateData
+  });
   return c.json({ book });
 });
 contentAdmin.delete("/books/:id", async (c) => {
@@ -146,7 +254,7 @@ contentAdmin.get("/media", async (c) => {
     title: m.title,
     author: m.user ? `${m.user.firstName} ${m.user.lastName}` : 'Unknown',
     mediaUrl: m.mediaUrl,
-    imageUrl: "",
+    imageUrl: m.imageUrl || "",
     type: m.type,
     duration: "00:00",
     category: "Reel",
@@ -157,9 +265,148 @@ contentAdmin.get("/media", async (c) => {
 });
 contentAdmin.post("/media", async (c) => {
   const prisma = getPrisma(c.env.DB);
-  const body = await c.req.json();
-  const media2 = await prisma.sermonMedia.create({ data: body });
+  let title, author, category, type, mediaUrl, imageUrl, duration;
+
+  try {
+    const formData = await c.req.formData();
+    
+    title = (formData.get("title") as string) || "Untitled";
+    author = (formData.get("author") as string) || "Unknown";
+    category = (formData.get("category") as string) || "Sermon";
+    type = ((formData.get("type") as string) || "VIDEO").toUpperCase();
+    
+    const file = formData.get("file");
+    if (!file) {
+      return c.json({ error: "Media file is required" }, 400);
+    }
+
+    const fileKey = `uploads/sermon-${Date.now()}-${(file as File).name}`;
+    const fileBuffer = await (file as File).arrayBuffer();
+    if (c.env.MEDIA_BUCKET) {
+      await c.env.MEDIA_BUCKET.put(fileKey, fileBuffer, {
+        httpMetadata: { contentType: (file as File).type },
+      });
+    }
+
+    const origin = new URL(c.req.url).origin;
+    mediaUrl = `${origin}/api/v1/media/download/${fileKey}`;
+
+    const thumbnail = formData.get("thumbnail");
+    imageUrl = "https://via.placeholder.com/600x400?text=No+Thumbnail";
+    if (thumbnail && (thumbnail as File).size > 0 && c.env.MEDIA_BUCKET) {
+      const thumbKey = `uploads/sermon-thumb-${Date.now()}-${(thumbnail as File).name}`;
+      const thumbBuffer = await (thumbnail as File).arrayBuffer();
+      await c.env.MEDIA_BUCKET.put(thumbKey, thumbBuffer, {
+        httpMetadata: { contentType: (thumbnail as File).type },
+      });
+      imageUrl = `${origin}/api/v1/media/download/${thumbKey}`;
+    }
+
+    duration = "00:00";
+  } catch (e) {
+    // Fallback if not multipart/form-data
+    const body = await c.req.json();
+    title = body.title;
+    author = body.author || "Unknown";
+    category = body.category || "Sermon";
+    type = body.type || "VIDEO";
+    mediaUrl = body.mediaUrl;
+    imageUrl = body.imageUrl || "https://via.placeholder.com/600x400?text=No+Thumbnail";
+    duration = body.duration || "00:00";
+  }
+
+  const media2 = await prisma.sermonMedia.create({ 
+    data: {
+      title,
+      author,
+      category,
+      type,
+      mediaUrl,
+      imageUrl,
+      duration
+    }
+  });
   return c.json({ media: media2 });
+});
+contentAdmin.put("/media/:id", async (c) => {
+  const prisma = getPrisma(c.env.DB);
+  const id = c.req.param("id");
+  let title, author, category, type, mediaUrl, imageUrl, duration;
+
+  try {
+    const formData = await c.req.formData();
+    
+    title = formData.get("title") as string;
+    author = formData.get("author") as string;
+    category = formData.get("category") as string;
+    type = formData.get("type") as string;
+    if (type) type = type.toUpperCase();
+    
+    const file = formData.get("file");
+    if (file && (file as File).size > 0 && c.env.MEDIA_BUCKET) {
+      const fileKey = `uploads/sermon-${Date.now()}-${(file as File).name}`;
+      const fileBuffer = await (file as File).arrayBuffer();
+      await c.env.MEDIA_BUCKET.put(fileKey, fileBuffer, {
+        httpMetadata: { contentType: (file as File).type },
+      });
+      const origin = new URL(c.req.url).origin;
+      mediaUrl = `${origin}/api/v1/media/download/${fileKey}`;
+    }
+
+    const thumbnail = formData.get("thumbnail");
+    if (thumbnail && (thumbnail as File).size > 0 && c.env.MEDIA_BUCKET) {
+      const thumbKey = `uploads/sermon-thumb-${Date.now()}-${(thumbnail as File).name}`;
+      const thumbBuffer = await (thumbnail as File).arrayBuffer();
+      await c.env.MEDIA_BUCKET.put(thumbKey, thumbBuffer, {
+        httpMetadata: { contentType: (thumbnail as File).type },
+      });
+      const origin = new URL(c.req.url).origin;
+      imageUrl = `${origin}/api/v1/media/download/${thumbKey}`;
+    }
+  } catch (e) {
+    // Fallback if not multipart/form-data
+    const body = await c.req.json();
+    title = body.title;
+    author = body.author;
+    category = body.category;
+    type = body.type;
+    mediaUrl = body.mediaUrl;
+    imageUrl = body.imageUrl;
+    duration = body.duration;
+  }
+
+  const updateData: any = {};
+  if (title !== undefined) updateData.title = title;
+  if (author !== undefined) updateData.author = author;
+  if (category !== undefined) updateData.category = category;
+  if (type !== undefined) updateData.type = type;
+  if (mediaUrl !== undefined) updateData.mediaUrl = mediaUrl;
+  if (imageUrl !== undefined) updateData.imageUrl = imageUrl;
+  if (duration !== undefined) updateData.duration = duration;
+
+  try {
+    const media2 = await prisma.sermonMedia.update({ 
+      where: { id },
+      data: updateData
+    });
+    return c.json({ media: media2 });
+  } catch (err) {
+    // Attempt to update userMedia if sermonMedia fails
+    try {
+      const mediaUser = await prisma.userMedia.update({
+        where: { id },
+        data: {
+          title: title !== undefined ? title : undefined,
+          mediaUrl: mediaUrl !== undefined ? mediaUrl : undefined,
+          imageUrl: imageUrl !== undefined ? imageUrl : undefined,
+          type: type !== undefined ? type : undefined,
+        }
+      });
+      return c.json({ media: mediaUser });
+    } catch (e2) {
+      return c.json({ error: "Media not found or failed to update" }, 404);
+    }
+  }
 });
 contentAdmin.delete("/media/:id", async (c) => {
   const prisma = getPrisma(c.env.DB);

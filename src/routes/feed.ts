@@ -25,6 +25,7 @@ feed.get("/", async (c) => {
   const videoItems = await prisma.sermonMedia.findMany({
     where: { type: "VIDEO" },
     include: { _count: { select: { mediaLikes: true } } },
+    orderBy: { createdAt: "desc" },
     take: 4
   });
   const uVideoItems = await prisma.userMedia.findMany({
@@ -36,6 +37,7 @@ feed.get("/", async (c) => {
   const audioItems = await prisma.sermonMedia.findMany({
     where: { type: "AUDIO" },
     include: { _count: { select: { mediaLikes: true } } },
+    orderBy: { createdAt: "desc" },
     take: 4
   });
   const uAudioItems = await prisma.userMedia.findMany({
@@ -44,8 +46,8 @@ feed.get("/", async (c) => {
     orderBy: { createdAt: "desc" },
     take: 4
   });
-  const mediaItems = [
-    ...videoItems.map((item) => ({ ...item, likes: item._count.mediaLikes })),
+  let mediaItems = [
+    ...videoItems.map((item) => ({ ...item, likes: item._count.mediaLikes, createdAt: item.createdAt })),
     ...uVideoItems.map((item) => ({
       id: item.id,
       title: item.title,
@@ -55,9 +57,10 @@ feed.get("/", async (c) => {
       type: "VIDEO",
       duration: "00:00",
       category: "Reel",
-      likes: 0
+      likes: 0,
+      createdAt: item.createdAt
     })),
-    ...audioItems.map((item) => ({ ...item, likes: item._count.mediaLikes })),
+    ...audioItems.map((item) => ({ ...item, likes: item._count.mediaLikes, createdAt: item.createdAt })),
     ...uAudioItems.map((item) => ({
       id: item.id,
       title: item.title,
@@ -67,9 +70,12 @@ feed.get("/", async (c) => {
       type: "AUDIO",
       duration: "00:00",
       category: "Reel",
-      likes: 0
+      likes: 0,
+      createdAt: item.createdAt
     }))
   ];
+  
+  mediaItems.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   const latestJournal = await prisma.journalEntry.findFirst({
     where: { userId },
     orderBy: { createdAt: "desc" }

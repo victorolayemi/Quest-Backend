@@ -65,6 +65,16 @@ communityAdmin.delete("/:id", async (c) => {
   await prisma.community.delete({ where: { id: c.req.param("id") } });
   return c.json({ success: true });
 });
+communityAdmin.get("/:id", async (c) => {
+  const prisma = getPrisma(c.env.DB);
+  const community = await prisma.community.findUnique({
+    where: { id: c.req.param("id") },
+    include: { _count: { select: { members: true, posts: true } } }
+  });
+  if (!community) return c.json({ error: "Not found" }, 404);
+  return c.json({ community });
+});
+
 communityAdmin.get("/:id/members", async (c) => {
   const prisma = getPrisma(c.env.DB);
   const members = await prisma.communityMember.findMany({
