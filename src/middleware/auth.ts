@@ -1,5 +1,6 @@
 import { Context, Next } from 'hono';
 import { verify } from 'hono/jwt';
+import { getPrisma } from '../utils/prisma';
 import { Bindings, Variables } from '../types';
 
 export async function authMiddleware(c: Context<{Bindings: Bindings, Variables: Variables}>, next: Next) {
@@ -19,4 +20,38 @@ export async function authMiddleware(c: Context<{Bindings: Bindings, Variables: 
   } catch (err2) {
     return c.json({ error: "Unauthorized: Invalid token" }, 401);
   }
+}
+
+export async function checkCommunityRestriction(c: Context<{Bindings: Bindings, Variables: Variables}>, next: Next) {
+  const userId = c.get("userId");
+  if (!userId) return c.json({ error: "Unauthorized" }, 401);
+  
+  const prisma = getPrisma(c.env.DB);
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { isCommunityRestricted: true }
+  });
+  
+  if (user?.isCommunityRestricted) {
+    return c.json({ error: "Your account has been restricted from community features due to a violation." }, 403);
+  }
+  
+  await next();
+}
+
+export async function checkMediaRestriction(c: Context<{Bindings: Bindings, Variables: Variables}>, next: Next) {
+  const userId = c.get("userId");
+  if (!userId) return c.json({ error: "Unauthorized" }, 401);
+  
+  const prisma = getPrisma(c.env.DB);
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { mediaRestrictionExpiry: true }
+  });
+  
+  if (user?.mediaRestrictionExpiry && new Date(user.mediaRestrictionExpiry) > new Date()) {
+    return c.json({ error: "Your account has been restricted from posting media due to a violation." }, 403);
+  }
+  
+  await next();
 }

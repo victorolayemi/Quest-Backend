@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { getPrisma } from "../utils/prisma";
-import { authMiddleware } from "../middleware/auth";
+import { authMiddleware, checkMediaRestriction } from "../middleware/auth";
 import { adminAuthMiddleware } from "../middleware/adminAuth";
 import admin from "firebase-admin";
 
@@ -706,7 +706,7 @@ media.get("/upload/limit-check", authMiddleware, async (c) => {
   return c.json({ limitReached: used >= limit, isPro: false, used, limit });
 });
 
-media.post("/upload", authMiddleware, async (c) => {
+media.post("/upload", async (c) => {
   const userId = c.get("userId");
   const prisma = getPrisma(c.env.DB);
   const formData = await c.req.formData();
@@ -735,6 +735,20 @@ media.post("/upload", authMiddleware, async (c) => {
   if (!file) {
     return c.json({ error: 'No file provided in form-data key "file"' }, 400);
   }
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { isBanned: true, mediaRestrictionExpiry: true }
+  });
+
+  if (user?.isBanned) {
+    return c.json({ error: "Your account is banned." }, 403);
+  }
+
+  if (user?.mediaRestrictionExpiry && new Date(user.mediaRestrictionExpiry) > new Date()) {
+    return c.json({ error: `Your account is restricted from posting media until ${new Date(user.mediaRestrictionExpiry).toLocaleDateString()}.` }, 403);
+  }
+
   if (isReel && !isEdit) {
     const activeSubscription = await prisma.subscription.findFirst({
       where: {

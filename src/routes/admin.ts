@@ -55,7 +55,12 @@ admin.get("/users", async (c) => {
         avatarUrl: true,
         isAdmin: true,
         isBanned: true,
-        createdAt: true
+        isCommunityRestricted: true,
+        createdAt: true,
+        subscriptions: {
+          where: { status: "active" },
+          select: { status: true }
+        }
       },
       orderBy: { createdAt: "desc" }
     });
@@ -92,6 +97,30 @@ admin.patch("/users/:id/ban", async (c) => {
     return c.json({ user });
   } catch (error: any) {
     return c.json({ error: "Failed to update ban status" }, 500);
+  }
+});
+admin.patch("/users/:id/restrict", async (c) => {
+  const prisma = getPrisma(c.env.DB);
+  const id = c.req.param("id");
+  try {
+    const body = await c.req.json();
+    const { isRestricted } = body;
+    
+    // For a general restriction, we restrict from community and set a media restriction for 7 days
+    const mediaRestrictionExpiry = isRestricted 
+      ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days from now
+      : null;
+
+    const user = await prisma.user.update({
+      where: { id },
+      data: { 
+        isCommunityRestricted: isRestricted,
+        mediaRestrictionExpiry
+      }
+    });
+    return c.json({ user });
+  } catch (error: any) {
+    return c.json({ error: "Failed to update restriction status" }, 500);
   }
 });
 admin.get("/users/:id/profile", async (c) => {
@@ -262,5 +291,108 @@ admin.post("/notify-all", async (c) => {
   }
 });
 
+admin.get("/dashboard-stats", async (c) => {
+  const prisma = getPrisma(c.env.DB);
+  try {
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const [
+      totalUsers,
+      bannedUsers,
+      adminUsers,
+      newUsers30d,
+      totalCommunities,
+      totalPosts,
+      activeSubscriptions,
+      pendingReports,
+      recentUsers,
+      recentPosts
+    ] = await Promise.all([
+      prisma.user.count(),
+      prisma.user.count({ where: { isBanned: true } }),
+      prisma.user.count({ where: { isAdmin: true } }),
+      prisma.user.count({ where: { createdAt: { gte: thirtyDaysAgo } } }),
+      prisma.community.count(),
+      prisma.post.count(),
+      prisma.subscription.count({ where: { status: 'active' } }),
+      prisma.report.count({ where: { status: 'PENDING' } }),
+      prisma.user.findMany({
+        where: { createdAt: { gte: thirtyDaysAgo } },
+        select: { createdAt: true }
+      }),
+      prisma.post.findMany({
+        where: { createdAt: { gte: thirtyDaysAgo } },
+        select: { createdAt: true }
+      })
+    ]);
+
+    const groupByDate = (data: { createdAt: Date }[]) => {
+      const grouped = data.reduce((acc: any, item) => {
+        const dateStr = item.createdAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        acc[dateStr] = (acc[dateStr] || 0) + 1;
+        return acc;
+      }, {});
+      return Object.keys(grouped).map(key => ({ name: key, value: grouped[key] }));
+    };
+
+    return c.json({
+      metrics: {
+        totalUsers,
+        bannedUsers,
+        adminUsers,
+        newUsers30d,
+        totalCommunities,
+        totalPosts,
+        activeSubscriptions,
+        pendingReports
+      },
+      charts: {
+        userGrowth: groupByDate(recentUsers),
+        contentGrowth: groupByDate(recentPosts)
+      }
+    });
+  } catch (error: any) {
+    console.error("Dashboard Stats Error:", error);
+    return c.json({ error: "Failed to fetch dashboard stats" }, 500);
+  }
+});
+
+admin.get("/subscriptions", async (c) => {
+  const prisma = getPrisma(c.env.DB);
+  try {
+    const subscriptions = await prisma.subscription.findMany({
+      include: {
+        user: { select: { id: true, username: true, email: true, firstName: true, lastName: true, avatarUrl: true } }
+      },
+      orderBy: { createdAt: "desc" }
+    });
+
+    const totalActive = subscriptions.filter(s => s.status === "active").length;
+    const totalExpired = subscriptions.filter(s => s.status === "expired").length;
+    const totalCancelled = subscriptions.filter(s => s.status === "cancelled").length;
+    
+    const appleActive = subscriptions.filter(s => s.status === "active" && s.platform === "apple").length;
+    const googleActive = subscriptions.filter(s => s.status === "active" && s.platform === "google").length;
+    
+    // Estimate MRR (Monthly Recurring Revenue). Assuming an average plan price is 4.99 
+    // Usually this comes from the product catalog, but for quick stats we use an estimate or sum by product ID
+    const estimatedMRR = totalActive * 4.99;
+
+    return c.json({
+      analytics: {
+        totalActive,
+        totalExpired,
+        totalCancelled,
+        appleActive,
+        googleActive,
+        estimatedMRR
+      },
+      auditLog: subscriptions
+    });
+  } catch (error: any) {
+    return c.json({ error: "Failed to fetch subscriptions" }, 500);
+  }
+});
 
 export default admin;

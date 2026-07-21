@@ -1,10 +1,9 @@
-
 import { FCMService } from '../services/fcm';
 import { dispatchNotification } from '../services/notificationService';
 
 import { Hono } from 'hono';
 import { getPrisma } from '../utils/prisma';
-import { authMiddleware } from '../middleware/auth';
+import { authMiddleware, checkCommunityRestriction } from '../middleware/auth';
 import { adminAuthMiddleware } from '../middleware/adminAuth';
 import admin from 'firebase-admin';
 
@@ -133,7 +132,7 @@ communities.get("/recommended", async (c) => {
   });
   return c.json(list);
 });
-communities.post("/", async (c) => {
+communities.post("/", checkCommunityRestriction, async (c) => {
   const userId = c.get("userId");
   const prisma = getPrisma(c.env.DB);
   const activeSubscription = await prisma.subscription.findFirst({
@@ -436,7 +435,7 @@ communities.get("/:id/posts/:postId", async (c) => {
   if (!post) return c.json({ error: "Post not found" }, 404);
   return c.json(post);
 });
-communities.post("/posts", async (c) => {
+communities.post("/posts", checkCommunityRestriction, async (c) => {
   const userId = c.get("userId");
   const body = await c.req.json() as any;
   const { communityId, text, image } = body;
@@ -445,10 +444,14 @@ communities.post("/posts", async (c) => {
     where: { id: communityId }
   });
   const member = await prisma.communityMember.findFirst({
-    where: { communityId, userId }
+    where: { communityId, userId },
+    include: { user: { select: { isCommunityRestricted: true, isBanned: true } } }
   });
   if (!community || !member) {
     return c.json({ error: "Community or member not found" }, 404);
+  }
+  if (member.user.isBanned || member.user.isCommunityRestricted) {
+    return c.json({ error: "Your account is restricted from posting in communities." }, 403);
   }
   if (member.role !== "ADMIN") {
     if (community.isForumDisabledGlobally) {
@@ -605,12 +608,22 @@ communities.get("/posts/:postId/comments", async (c) => {
   });
   return c.json(list);
 });
-communities.post("/posts/:postId/comments", async (c) => {
+communities.post("/posts/:postId/comments", checkCommunityRestriction, async (c) => {
   const userId = c.get("userId");
   const postId = c.req.param("postId");
   const body = await c.req.json() as any;
   const { text, parentId } = body;
   const prisma = getPrisma(c.env.DB);
+  
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { isBanned: true, isCommunityRestricted: true }
+  });
+  
+  if (!user || user.isBanned || user.isCommunityRestricted) {
+    return c.json({ error: "Your account is restricted from posting comments." }, 403);
+  }
+
   const comment = await prisma.comment.create({
     data: {
       postId,
@@ -1013,7 +1026,7 @@ communities.get("/:id/messages", async (c) => {
   }));
   return c.json(result);
 });
-communities.post("/:id/messages", async (c) => {
+communities.post("/:id/messages", checkCommunityRestriction, async (c) => {
   const communityId = c.req.param("id");
   const senderId = c.get("userId");
   const body = await c.req.json() as any;
@@ -1061,7 +1074,7 @@ communities.post("/:id/messages", async (c) => {
   }
   return c.json(msg);
 });
-communities.post("/:id/forum/messages", async (c) => {
+communities.post("/:id/forum/messages", checkCommunityRestriction, async (c) => {
   const communityId = c.req.param("id");
   const senderId = c.get("userId");
   const body = await c.req.json() as any;
@@ -1388,7 +1401,7 @@ communities.get("/:id/messages/:msgId/comments", async (c) => {
   });
   return c.json(comments);
 });
-communities.post("/:id/messages/:msgId/comments", async (c) => {
+communities.post("/:id/messages/:msgId/comments", checkCommunityRestriction, async (c) => {
   const msgId = c.req.param("msgId");
   const userId = c.get("userId");
   const body = await c.req.json() as any;
