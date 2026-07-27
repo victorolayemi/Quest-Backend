@@ -95,3 +95,32 @@ export async function checkAndDeductCoins(
 
   return { success: true };
 }
+
+/**
+ * Grants coins to a user and logs the transaction.
+ */
+export async function grantCoins(
+  prisma: PrismaClient,
+  userId: string,
+  amount: number,
+  description: string
+): Promise<{ success: boolean; newBalance?: number }> {
+  if (amount <= 0) return { success: true };
+
+  const [user, _] = await prisma.$transaction([
+    prisma.user.update({
+      where: { id: userId },
+      data: { coinBalance: { increment: amount } }
+    }),
+    prisma.coinTransaction.create({
+      data: {
+        userId,
+        amount,
+        type: 'EARN',
+        description
+      }
+    })
+  ]);
+
+  return { success: true, newBalance: user.coinBalance };
+}

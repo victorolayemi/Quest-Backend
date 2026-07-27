@@ -3,6 +3,7 @@ import { getPrisma } from '../utils/prisma';
 import { authMiddleware } from '../middleware/auth';
 import { adminAuthMiddleware } from '../middleware/adminAuth';
 import admin from 'firebase-admin';
+import { grantCoins } from '../utils/economy';
 
 // src/routes/quizzes.ts
 import { Bindings, Variables } from '../types';
@@ -142,12 +143,16 @@ quizzes.post("/solo/:quizId/submit", async (c) => {
       quizPoints: { increment: pointsEarned }
     }
   });
+
+  const coinRes = await grantCoins(prisma, userId, pointsEarned, "Completed a Quiz");
+
   return c.json({
     message: "Quiz submitted successfully",
     attempt,
     questionsCount: quiz.questions.length,
     correctAnswers: score,
-    pointsEarned
+    pointsEarned,
+    coinBalance: coinRes.newBalance
   });
 });
 quizzes.get("/solo/:quizId/result", async (c) => {

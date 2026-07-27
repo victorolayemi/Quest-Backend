@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { getPrisma } from '../utils/prisma';
 import { authMiddleware } from '../middleware/auth';
+import { grantCoins } from '../utils/economy';
 import { adminAuthMiddleware } from '../middleware/adminAuth';
 import admin from 'firebase-admin';
 
@@ -222,6 +223,7 @@ devotions.post("/plans/:planId/days/:dayNum/complete", async (c) => {
     }
   });
   
+  let coinRes;
   if (dayNumber >= progress.currentDay) {
     await prisma.user.update({
       where: { id: userId },
@@ -230,12 +232,14 @@ devotions.post("/plans/:planId/days/:dayNum/complete", async (c) => {
         devotionPoints: { increment: day2.pointsEarned }
       }
     });
+    coinRes = await grantCoins(prisma, userId, day2.pointsEarned, "Completed a devotion day");
   }
   return c.json({
     message: "Day completed successfully",
     pointsEarned: day2.pointsEarned,
     planFinished: completedAt !== null,
-    nextDay
+    nextDay,
+    coinBalance: coinRes?.newBalance
   });
 });
 devotions.put("/plans/:planId/reminder", async (c) => {

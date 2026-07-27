@@ -6,7 +6,7 @@ import admin from "firebase-admin";
 
 // src/routes/media.ts
 import { Bindings, Variables } from "../types";
-import { checkAndDeductCoins } from "../utils/economy";
+import { grantCoins, checkAndDeductCoins } from "../utils/economy";
 
 var media = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 media.get("/download/*", async (c) => {
@@ -440,6 +440,7 @@ media.post("/videos/:id/playback", authMiddleware, async (c) => {
       },
     });
   }
+  let coinRes;
   if (completed && (!existing || !existing.completed)) {
     await prisma.user.update({
       where: { id: userId },
@@ -448,8 +449,9 @@ media.post("/videos/:id/playback", authMiddleware, async (c) => {
         videoReelPoints: { increment: 20 },
       },
     });
+    coinRes = await grantCoins(prisma, userId, 20, "Finished watching a video reel");
   }
-  return c.json(record);
+  return c.json({ ...record, coinBalance: coinRes?.newBalance });
 });
 media.get("/audio", async (c) => {
   const prisma = getPrisma(c.env.DB);
@@ -676,6 +678,7 @@ media.post("/audio/:id/playback", authMiddleware, async (c) => {
       data: { userId, mediaId: mediaId as string, progressSeconds, completed },
     });
   }
+  let coinRes;
   if (completed && (!existing || !existing.completed)) {
     await prisma.user.update({
       where: { id: userId },
@@ -684,8 +687,9 @@ media.post("/audio/:id/playback", authMiddleware, async (c) => {
         audioReelPoints: { increment: 20 },
       },
     });
+    coinRes = await grantCoins(prisma, userId, 20, "Finished listening to an audio reel");
   }
-  return c.json(record);
+  return c.json({ ...record, coinBalance: coinRes?.newBalance });
 });
 media.get("/upload/limit-check", authMiddleware, async (c) => {
   const userId = c.get("userId");

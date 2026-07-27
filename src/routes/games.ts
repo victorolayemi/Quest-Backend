@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { getPrisma } from '../utils/prisma';
 import { authMiddleware } from '../middleware/auth';
+import { grantCoins } from '../utils/economy';
 import { adminAuthMiddleware } from '../middleware/adminAuth';
 import admin from 'firebase-admin';
 
@@ -130,7 +131,10 @@ games.post("/score", async (c) => {
         }
       }
     }
-    return c.json({ message: "Score saved successfully", score: savedScore, pointsEarned });
+
+    const coinRes = await grantCoins(prisma, userId, pointsEarned, `Completed a game of ${gameType}`);
+
+    return c.json({ message: "Score saved successfully", score: savedScore, pointsEarned, coinBalance: coinRes.newBalance });
   } catch (error) {
     return c.json({ error: "Failed to save score" }, 500);
   }
@@ -223,7 +227,8 @@ games.post("/daily-bread/share", authMiddleware, async (c) => {
         dailyBreadPoints: { increment: 10 }
       }
     });
-    return c.json({ message: "Points awarded for sharing Daily Bread" });
+    const coinRes = await grantCoins(prisma, userId, 10, "Shared Daily Bread");
+    return c.json({ message: "Points awarded for sharing Daily Bread", coinBalance: coinRes.newBalance });
   } catch (error) {
     return c.json({ error: "Failed to award points" }, 500);
   }

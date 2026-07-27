@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { getPrisma } from '../utils/prisma';
 import { authMiddleware } from '../middleware/auth';
+import { grantCoins } from '../utils/economy';
 import { adminAuthMiddleware } from '../middleware/adminAuth';
 import admin from 'firebase-admin';
 
@@ -56,12 +57,17 @@ dailyBread.post("/submit", async (c) => {
       where: { id: userId },
       data: {
         points: { increment: 20 },
+        dailyBreadPoints: { increment: 20 },
         streakCount: { increment: 1 }
       }
     });
+    
+    const coinRes = await grantCoins(prisma, userId, 20, "Solved Daily Bread");
+
     return c.json({
       correct: true,
       pointsEarned: 20,
+      coinBalance: coinRes.newBalance,
       message: "Awesome job! Puzzle solved."
     });
   }
@@ -196,7 +202,8 @@ dailyBread.post("/verse-today/like", async (c) => {
     return c.json({ liked: true });
   }
 });
-dailyBread.post("/verse-today/share", async (c) => {
+dailyBread.post("/verse-today/share", authMiddleware, async (c) => {
+  const userId = c.get("userId");
   const prisma = getPrisma(c.env.DB);
   const todayStr = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
   const stat = await prisma.dailyVerseStat.upsert({
@@ -204,7 +211,17 @@ dailyBread.post("/verse-today/share", async (c) => {
     create: { date: todayStr, shares: 1 },
     update: { shares: { increment: 1 } }
   });
-  return c.json({ sharesCount: stat.shares });
+  
+  await prisma.user.update({
+    where: { id: userId },
+    data: {
+      points: { increment: 10 },
+      dailyBreadPoints: { increment: 10 }
+    }
+  });
+  const coinRes = await grantCoins(prisma, userId, 10, "Shared Daily Verse");
+  
+  return c.json({ sharesCount: stat.shares, coinBalance: coinRes.newBalance });
 });
 
 
