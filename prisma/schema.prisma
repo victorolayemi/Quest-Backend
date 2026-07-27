@@ -918,5 +918,6 @@ model GlobalSettings {
   audioUploadDurationLimitSec Int     @default(1800)
   devotionVideoSizeLimitMB   Int      @default(50)
   devotionVideoDurationLimitSec Int   @default(300)
+  registrationOtpEnabled     Boolean  @default(true)
   updatedAt                  DateTime @updatedAt
 }

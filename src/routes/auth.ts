@@ -107,6 +107,17 @@ auth.post("/otp/send", async (c) => {
     return c.json({ error: "Contact field is required" }, 400);
   }
   const prisma = getPrisma(c.env.DB);
+  
+  // Check if OTP is enabled
+  const globalSettings = await prisma.globalSettings.findUnique({ where: { id: "default" } });
+  if (globalSettings && !globalSettings.registrationOtpEnabled) {
+    return c.json({
+      message: "OTP sent successfully",
+      contact,
+      mocked: true
+    });
+  }
+
   const randomArray = new Uint32Array(1);
   crypto.getRandomValues(randomArray);
   const code = (1e3 + randomArray[0] % 9e3).toString();
@@ -151,25 +162,42 @@ auth.post("/otp/send", async (c) => {
     contact
   });
 });
+
 auth.post("/register", async (c) => {
   const body = await c.req.json();
   const { contact, code, password, firstName, lastName, username, gender } = body;
-  if (!contact || !code || !password || !username) {
-    return c.json({ error: "Contact, code, password, and username are required" }, 400);
-  }
+  
   const prisma = getPrisma(c.env.DB);
-  const otpRequest = await prisma.otpRequest.findFirst({
-    where: {
-      contact,
-      code,
-      expiresAt: { gte: /* @__PURE__ */ new Date() },
-      verified: false
-    },
-    orderBy: { expiresAt: "desc" }
-  });
-  if (!otpRequest) {
-    return c.json({ error: "Invalid or expired OTP" }, 400);
+  const globalSettings = await prisma.globalSettings.findUnique({ where: { id: "default" } });
+  const otpEnabled = globalSettings ? globalSettings.registrationOtpEnabled : true;
+
+  if (!contact || password === undefined || !username) {
+    return c.json({ error: "Contact, password, and username are required" }, 400);
   }
+
+  if (otpEnabled && !code) {
+    return c.json({ error: "Code is required when OTP is enabled" }, 400);
+  }
+
+  if (otpEnabled) {
+    const otpRequest = await prisma.otpRequest.findFirst({
+      where: {
+        contact,
+        code,
+        expiresAt: { gte: new Date() },
+        verified: false
+      },
+      orderBy: { expiresAt: "desc" }
+    });
+    if (!otpRequest) {
+      return c.json({ error: "Invalid or expired OTP" }, 400);
+    }
+    await prisma.otpRequest.update({
+      where: { id: otpRequest.id },
+      data: { verified: true }
+    });
+  }
+
   const existingUsername = await prisma.user.findUnique({
     where: { username }
   });
@@ -187,11 +215,9 @@ auth.post("/register", async (c) => {
   if (existingUser && !existingUser.isGuest) {
     return c.json({ error: "User with this contact already exists. Please login." }, 400);
   }
+  
   const hashedPassword = await hashPassword(password);
-  await prisma.otpRequest.update({
-    where: { id: otpRequest.id },
-    data: { verified: true }
-  });
+  
   let user;
   if (existingUser && existingUser.isGuest) {
     user = await prisma.user.update({
@@ -228,6 +254,7 @@ auth.post("/register", async (c) => {
     user
   });
 });
+
 auth.post("/login", async (c) => {
   const body = await c.req.json();
   const { contact, password } = body;

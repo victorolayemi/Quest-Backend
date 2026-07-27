@@ -5,7 +5,25 @@ import { adminAuthMiddleware } from "../middleware/adminAuth";
 
 const settings = new Hono<{ Bindings: { DB: D1Database } }>();
 
-// Public/User endpoint to get current settings
+// Public endpoint to get non-sensitive settings (e.g., OTP enabled)
+settings.get("/public", async (c) => {
+  const prisma = getPrisma(c.env.DB);
+  let globalSettings = await prisma.globalSettings.findUnique({ where: { id: "default" } });
+  
+  if (!globalSettings) {
+    globalSettings = await prisma.globalSettings.create({
+      data: { id: "default" }
+    });
+  }
+  
+  return c.json({ 
+    settings: {
+      registrationOtpEnabled: globalSettings.registrationOtpEnabled
+    } 
+  });
+});
+
+// User endpoint to get current settings
 settings.get("/", authMiddleware, async (c) => {
   const prisma = getPrisma(c.env.DB);
   let globalSettings = await prisma.globalSettings.findUnique({ where: { id: "default" } });
@@ -38,6 +56,7 @@ settings.put("/admin", adminAuthMiddleware, async (c) => {
       audioUploadDurationLimitSec: body.audioUploadDurationLimitSec ?? globalSettings.audioUploadDurationLimitSec,
       devotionVideoSizeLimitMB: body.devotionVideoSizeLimitMB ?? globalSettings.devotionVideoSizeLimitMB,
       devotionVideoDurationLimitSec: body.devotionVideoDurationLimitSec ?? globalSettings.devotionVideoDurationLimitSec,
+      registrationOtpEnabled: body.registrationOtpEnabled ?? globalSettings.registrationOtpEnabled,
     }
   });
 
