@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { getPrisma } from '../utils/prisma';
 import { authMiddleware } from '../middleware/auth';
+import { checkAndDeductCoins } from '../utils/economy';
 import { Bindings, Variables } from '../types';
 
 const notesRouter = new Hono<{Bindings: Bindings, Variables: Variables}>();
@@ -43,6 +44,12 @@ notesRouter.post("/", async (c) => {
   const body = await c.req.json();
   const { title, bodyText, isFavorite, images, verses } = body;
   const prisma = getPrisma(c.env.DB);
+
+  const economyCheck = await checkAndDeductCoins(c, prisma, userId, 'create_note', 'Created a new note');
+  if (!economyCheck.success) {
+    return c.json({ error: economyCheck.message || "Insufficient coins or limit reached" }, 403);
+  }
+
   const newNote = await prisma.personalNote.create({
     data: {
       userId,

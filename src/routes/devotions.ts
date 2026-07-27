@@ -11,6 +11,7 @@ devotions.use("*", authMiddleware);
 devotions.get("/plans", async (c) => {
   const prisma = getPrisma(c.env.DB);
   const list = await prisma.devotionPlan.findMany({
+    where: { status: "APPROVED" },
     include: {
       days: true
     }
@@ -23,6 +24,7 @@ devotions.get("/search", async (c) => {
   if (!query) return c.json([]);
   const list = await prisma.devotionPlan.findMany({
     where: {
+      status: "APPROVED",
       OR: [
         { title: { contains: query } },
         { description: { contains: query } },
@@ -36,6 +38,17 @@ devotions.get("/search", async (c) => {
   });
   return c.json(list);
 });
+devotions.get("/created", async (c) => {
+  const prisma = getPrisma(c.env.DB);
+  const userId = c.get("userId");
+  const myPlans = await prisma.devotionPlan.findMany({
+    where: { authorId: userId },
+    orderBy: { createdAt: "desc" },
+    include: { days: true }
+  });
+  return c.json(myPlans);
+});
+
 devotions.get("/plans/:id", async (c) => {
   const id = c.req.param("id");
   const prisma = getPrisma(c.env.DB);
@@ -46,6 +59,51 @@ devotions.get("/plans/:id", async (c) => {
   if (!plan) return c.json({ error: "Plan not found" }, 404);
   return c.json(plan);
 });
+
+devotions.post("/plans", async (c) => {
+  const userId = c.get("userId");
+  const prisma = getPrisma(c.env.DB);
+  
+  // Only Gold Badge users can upload devotions
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user || (user.verificationBadge !== "GOLD" && !user.isAdmin)) {
+    return c.json({ error: "Only Gold badge members can submit devotion plans." }, 403);
+  }
+
+  let data: any = {};
+  const contentType = c.req.header("content-type") || "";
+  
+  if (contentType.includes("multipart/form-data")) {
+    const formData = await c.req.formData();
+    data = {
+      title: formData.get("title") as string,
+      description: formData.get("description") as string,
+      authorName: formData.get("authorName") as string,
+      authorHandle: formData.get("authorHandle") as string,
+      tag: formData.get("tag") as string,
+      durationDays: parseInt(formData.get("durationDays") as string, 10) || 1,
+    };
+    const file = formData.get("image") as unknown as File;
+    if (file && file.size > 0 && c.env.MEDIA_BUCKET) {
+      const fileKey = `devotions/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, "_")}`;
+      const fileBuffer = await file.arrayBuffer();
+      await c.env.MEDIA_BUCKET.put(fileKey, fileBuffer, {
+        httpMetadata: { contentType: file.type }
+      });
+      const origin = new URL(c.req.url).origin;
+      data.image = `${origin}/api/v1/media/download/${fileKey}`;
+    }
+  } else {
+    data = await c.req.json();
+  }
+
+  data.authorId = userId;
+  data.status = "PENDING_REVIEW";
+
+  const plan = await prisma.devotionPlan.create({ data });
+  return c.json({ message: "Devotion plan submitted for review successfully", plan });
+});
+
 devotions.post("/plans/:id/subscribe", async (c) => {
   const userId = c.get("userId");
   const planId = c.req.param("id");
@@ -221,8 +279,106 @@ devotions.post("/plans/:id/like", async (c) => {
   return c.json({ message: "Day liked", likes: updated.likesCount, hasLiked: true });
 });
 devotions.post("/plans/:id/share", async (c) => {
-  return c.json({ shareUrl: `https://quest-app.com/devotions/${c.req.param("id")}` });
+  const prisma = getPrisma(c.env.DB);
+  return c.json({ message: "Devotion plan shared successfully" });
 });
 
+devotions.delete("/plans/:id", async (c) => {
+  const prisma = getPrisma(c.env.DB);
+  const userId = c.get("userId");
+  const planId = c.req.param("id");
+
+  const plan = await prisma.devotionPlan.findUnique({ where: { id: planId } });
+  if (!plan) return c.json({ error: "Plan not found" }, 404);
+  if (plan.authorId !== userId) return c.json({ error: "Unauthorized" }, 403);
+
+  await prisma.devotionPlan.delete({ where: { id: planId } });
+  return c.json({ message: "Plan deleted successfully" });
+});
+
+devotions.put("/plans/:id", async (c) => {
+  const prisma = getPrisma(c.env.DB);
+  const userId = c.get("userId");
+  const planId = c.req.param("id");
+
+  const existingPlan = await prisma.devotionPlan.findUnique({ 
+    where: { id: planId },
+    include: { days: true }
+  });
+  if (!existingPlan) return c.json({ error: "Plan not found" }, 404);
+  if (existingPlan.authorId !== userId) return c.json({ error: "Unauthorized" }, 403);
+
+  const reqData = await c.req.json();
+
+  const data = {
+    title: reqData.title !== undefined ? reqData.title : existingPlan.title,
+    description: reqData.description !== undefined ? reqData.description : existingPlan.description,
+    durationDays: reqData.durationDays !== undefined ? reqData.durationDays : existingPlan.durationDays,
+    authorName: reqData.authorName !== undefined ? reqData.authorName : existingPlan.authorName,
+    authorHandle: reqData.authorHandle !== undefined ? reqData.authorHandle : existingPlan.authorHandle,
+    tag: reqData.tag !== undefined ? reqData.tag : existingPlan.tag,
+    image: reqData.image !== undefined ? reqData.image : existingPlan.image,
+  };
+
+  if (existingPlan.status === "APPROVED") {
+    // Create a new PENDING_REVIEW revision
+    // If days are not explicitly provided in the request, we copy the existing ones
+    const daysToCreate = reqData.days || existingPlan.days;
+    const revision = await prisma.devotionPlan.create({
+      data: {
+        ...data,
+        authorId: userId,
+        status: "PENDING_REVIEW",
+        originalId: existingPlan.id,
+        days: {
+          create: daysToCreate.map((d: any) => ({
+            dayNumber: d.dayNumber,
+            title: d.title,
+            bodyText: d.bodyText,
+            image: d.image,
+            videoUrl: d.videoUrl,
+            pointsEarned: d.pointsEarned ?? 10
+          }))
+        }
+      },
+      include: { days: true }
+    });
+    return c.json({ message: "Plan revision submitted for review", plan: revision });
+  } else {
+    // Update in place
+    let updatedPlan;
+    if (reqData.days) {
+      await prisma.devotionDay.deleteMany({ where: { planId } });
+      updatedPlan = await prisma.devotionPlan.update({
+        where: { id: planId },
+        data: {
+          ...data,
+          status: "PENDING_REVIEW",
+          days: {
+            create: reqData.days.map((d: any) => ({
+              dayNumber: d.dayNumber,
+              title: d.title,
+              bodyText: d.bodyText,
+              image: d.image,
+              videoUrl: d.videoUrl,
+              pointsEarned: d.pointsEarned ?? 10
+            }))
+          }
+        },
+        include: { days: true }
+      });
+    } else {
+      updatedPlan = await prisma.devotionPlan.update({
+        where: { id: planId },
+        data: {
+          ...data,
+          status: "PENDING_REVIEW",
+        },
+        include: { days: true }
+      });
+    }
+    return c.json({ message: "Plan updated successfully", plan: updatedPlan });
+  }
+});
 
 export default devotions;

@@ -12,6 +12,25 @@ import * as firebaseAdmin from 'firebase-admin';
 import { Bindings, Variables } from '../types';
 var admin = new Hono<{Bindings: Bindings, Variables: Variables}>();
 admin.use("*", adminAuthMiddleware);
+
+admin.post("/upload", async (c) => {
+  const formData = await c.req.formData();
+  const file = formData.get("file") as File;
+  if (!file || !file.size) return c.json({ error: "No file provided" }, 400);
+
+  const fileKey = `admin-uploads/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, "_")}`;
+  const fileBuffer = await file.arrayBuffer();
+  if (c.env.MEDIA_BUCKET) {
+    await c.env.MEDIA_BUCKET.put(fileKey, fileBuffer, {
+      httpMetadata: { contentType: file.type }
+    });
+  }
+  
+  const origin = new URL(c.req.url).origin;
+  const url = `${origin}/api/v1/media/download/${fileKey}`;
+  return c.json({ url });
+});
+
 async function hashPassword2(password: string, existingSalt?: string) {
   const encoder2 = new TextEncoder();
   const passwordKey = await crypto.subtle.importKey(
@@ -185,6 +204,45 @@ admin.patch("/users/:id/password", async (c) => {
     return c.json({ message: "Password updated successfully" });
   } catch (error: any) {
     return c.json({ error: "Failed to update password" }, 500);
+  }
+});
+
+admin.patch("/users/:id/badge", async (c) => {
+  const prisma = getPrisma(c.env.DB);
+  const id = c.req.param("id");
+  const adminUserId = c.get("userId"); // The admin doing the assignment
+  
+  try {
+    const body = await c.req.json();
+    const { badge, reason } = body;
+    
+    if (!reason || reason.trim() === '') {
+      return c.json({ error: "Audit reason is required for assigning badges" }, 400);
+    }
+
+    const validBadges = ["NONE", "BLUE", "GOLD"];
+    if (!validBadges.includes(badge)) {
+      return c.json({ error: "Invalid badge level" }, 400);
+    }
+
+    const user = await prisma.user.update({
+      where: { id },
+      data: { verificationBadge: badge }
+    });
+
+    // Create Audit Log
+    await prisma.adminAuditLog.create({
+      data: {
+        adminId: adminUserId,
+        targetId: id,
+        action: `SET_BADGE_${badge}`,
+        reason: reason
+      }
+    });
+
+    return c.json({ message: "Badge updated successfully", user: { id: user.id, verificationBadge: user.verificationBadge } });
+  } catch (error: any) {
+    return c.json({ error: "Failed to update badge" }, 500);
   }
 });
 admin.get("/features", async (c) => {

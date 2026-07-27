@@ -6,6 +6,8 @@ import admin from "firebase-admin";
 
 // src/routes/media.ts
 import { Bindings, Variables } from "../types";
+import { checkAndDeductCoins } from "../utils/economy";
+
 var media = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 media.get("/download/*", async (c) => {
   const path = c.req.path;
@@ -736,6 +738,26 @@ media.post("/upload", async (c) => {
     return c.json({ error: 'No file provided in form-data key "file"' }, 400);
   }
 
+  let globalSettings = await prisma.globalSettings.findUnique({ where: { id: "default" } });
+  if (!globalSettings) {
+    globalSettings = {
+      videoUploadSizeLimitMB: 50,
+      audioUploadSizeLimitMB: 50,
+      devotionVideoSizeLimitMB: 50,
+      videoUploadDurationLimitSec: 300,
+      audioUploadDurationLimitSec: 1800,
+      devotionVideoDurationLimitSec: 300,
+    } as any;
+  }
+
+  const fileSizeInMB = (file as File).size / (1024 * 1024);
+  if (type === 'video' && fileSizeInMB > globalSettings.videoUploadSizeLimitMB) {
+    return c.json({ error: `Video file exceeds the limit of ${globalSettings.videoUploadSizeLimitMB}MB.` }, 400);
+  }
+  if (type === 'audio' && fileSizeInMB > globalSettings.audioUploadSizeLimitMB) {
+    return c.json({ error: `Audio file exceeds the limit of ${globalSettings.audioUploadSizeLimitMB}MB.` }, 400);
+  }
+
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: { isBanned: true, mediaRestrictionExpiry: true }
@@ -750,35 +772,10 @@ media.post("/upload", async (c) => {
   }
 
   if (isReel && !isEdit) {
-    const activeSubscription = await prisma.subscription.findFirst({
-      where: {
-        userId,
-        status: "active",
-        expiresAt: { gt: /* @__PURE__ */ new Date() },
-      },
-    });
-    if (!activeSubscription) {
-      const feature = await prisma.appFeature.findUnique({
-        where: { key: "free_media_posts_limit" },
-      });
-      let limit = 3;
-      if (feature && feature.value) {
-        const parsedLimit = parseInt(feature.value, 10);
-        if (!isNaN(parsedLimit)) {
-          limit = parsedLimit;
-        }
-      }
-      const uploadCount = await prisma.userMedia.count({
-        where: { userId },
-      });
-      if (uploadCount >= limit) {
-        return c.json(
-          {
-            error: `Upload limit reached. Please subscribe to upload more media.`,
-          },
-          403,
-        );
-      }
+    const actionType = type === 'video' ? 'post_video' : 'post_audio';
+    const economyCheck = await checkAndDeductCoins(c, prisma, userId, actionType, `Posted a ${type} reel`);
+    if (!economyCheck.success) {
+      return c.json({ error: economyCheck.message || "Insufficient coins to post media" }, 403);
     }
   }
   const fileKey = `uploads/${Date.now()}-${(file as File).name}`;
@@ -843,6 +840,48 @@ media.delete("/file", async (c) => {
     return c.json({ error: "R2 Bucket not configured" }, 500);
   }
   return c.json({ message: "File deleted permanently" });
+});
+
+media.get("/user/created", authMiddleware, async (c) => {
+  const prisma = getPrisma(c.env.DB);
+  const userId = c.get("userId");
+  const userMedia = await prisma.userMedia.findMany({
+    where: { userId },
+    orderBy: { createdAt: "desc" },
+  });
+  return c.json(userMedia);
+});
+
+media.put("/user/:id", authMiddleware, async (c) => {
+  const prisma = getPrisma(c.env.DB);
+  const userId = c.get("userId");
+  const mediaId = c.req.param("id");
+
+  const existingMedia = await prisma.userMedia.findUnique({ where: { id: mediaId } });
+  if (!existingMedia) return c.json({ error: "Media not found" }, 404);
+  if (existingMedia.userId !== userId) return c.json({ error: "Unauthorized" }, 403);
+
+  const reqData = await c.req.json();
+  const updatedMedia = await prisma.userMedia.update({
+    where: { id: mediaId },
+    data: {
+      title: reqData.title !== undefined ? reqData.title : existingMedia.title,
+    }
+  });
+  return c.json({ message: "Media updated successfully", media: updatedMedia });
+});
+
+media.delete("/user/:id", authMiddleware, async (c) => {
+  const prisma = getPrisma(c.env.DB);
+  const userId = c.get("userId");
+  const mediaId = c.req.param("id");
+
+  const existingMedia = await prisma.userMedia.findUnique({ where: { id: mediaId } });
+  if (!existingMedia) return c.json({ error: "Media not found" }, 404);
+  if (existingMedia.userId !== userId) return c.json({ error: "Unauthorized" }, 403);
+
+  await prisma.userMedia.delete({ where: { id: mediaId } });
+  return c.json({ message: "Media deleted successfully" });
 });
 
 export default media;

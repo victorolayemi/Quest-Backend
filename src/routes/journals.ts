@@ -4,8 +4,9 @@ import { authMiddleware } from '../middleware/auth';
 import { adminAuthMiddleware } from '../middleware/adminAuth';
 import admin from 'firebase-admin';
 
-// src/routes/journals.ts
 import { Bindings, Variables } from '../types';
+import { checkAndDeductCoins } from '../utils/economy';
+
 var journals = new Hono<{Bindings: Bindings, Variables: Variables}>();
 journals.use("*", authMiddleware);
 journals.get("/", async (c) => {
@@ -46,6 +47,12 @@ journals.post("/", async (c) => {
   const body = await c.req.json();
   const { title, bodyText, feelings, verses } = body;
   const prisma = getPrisma(c.env.DB);
+
+  const economyCheck = await checkAndDeductCoins(c, prisma, userId, 'create_journal', 'Created a new journal entry');
+  if (!economyCheck.success) {
+    return c.json({ error: economyCheck.message || "Insufficient coins or limit reached" }, 403);
+  }
+
   const newJournal = await prisma.journalEntry.create({
     data: {
       userId,

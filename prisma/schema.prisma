@@ -104,6 +104,11 @@ model User {
   isCommunityRestricted       Boolean                       @default(false)
   mediaRestrictionExpiry      DateTime?
   reports                     Report[]
+  verificationBadge           String                        @default("NONE") // NONE, BLUE, GOLD
+  coinBalance                 Int                           @default(0)
+  createdDevotions            DevotionPlan[]                @relation("DevotionAuthor")
+  createdBooks                Book[]                        @relation("BookAuthor")
+  coinTransactions            CoinTransaction[]
 }
 
 model OtpRequest {
@@ -428,6 +433,10 @@ model DevotionPlan {
   authorHandle String
   tag          String
   createdAt    DateTime      @default(now())
+  status       String        @default("APPROVED") // PENDING_REVIEW, APPROVED, REJECTED
+  originalId   String?       // ID of the original plan if this is a pending revision
+  authorId     String?
+  authorUser   User?         @relation("DevotionAuthor", fields: [authorId], references: [id])
   days         DevotionDay[]
 }
 
@@ -693,6 +702,10 @@ model Book {
   topic       String?
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
+  status      String         @default("APPROVED") // PENDING_REVIEW, APPROVED, REJECTED
+  originalId  String?        // ID of the original book if this is a pending revision
+  authorId    String?
+  authorUser  User?          @relation("BookAuthor", fields: [authorId], references: [id])
   comments    BookComment[]
   reactions   BookReaction[]
   savedBy     SavedBook[]
@@ -861,4 +874,49 @@ model CommunityMessageCommentLike {
   comment   CommunityMessageComment @relation(fields: [commentId], references: [id], onDelete: Cascade)
 
   @@unique([userId, commentId])
+}
+
+model SystemSetting {
+  key   String @id
+  value String
+}
+
+model CoinTransaction {
+  id          String   @id @default(uuid())
+  userId      String
+  amount      Int
+  type        String   // SPEND, EARN
+  description String
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model CoinPackage {
+  id             String   @id @default(uuid())
+  amount         Int
+  price          Float
+  validityDays   Int?
+  storeProductId String?  // For IAP
+  createdAt      DateTime @default(now())
+}
+
+model AdminAuditLog {
+  id          String   @id @default(uuid())
+  adminId     String
+  targetId    String
+  action      String   // e.g. "GRANT_BLUE_BADGE"
+  reason      String
+  createdAt   DateTime @default(now())
+}
+
+model GlobalSettings {
+  id                         String   @id @default("default")
+  videoUploadSizeLimitMB     Int      @default(50)
+  videoUploadDurationLimitSec Int     @default(300)
+  audioUploadSizeLimitMB     Int      @default(50)
+  audioUploadDurationLimitSec Int     @default(1800)
+  devotionVideoSizeLimitMB   Int      @default(50)
+  devotionVideoDurationLimitSec Int   @default(300)
+  updatedAt                  DateTime @updatedAt
 }

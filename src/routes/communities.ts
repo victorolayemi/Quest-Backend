@@ -9,6 +9,8 @@ import admin from 'firebase-admin';
 
 // src/routes/communities.ts
 import { Bindings, Variables } from '../types';
+import { checkAndDeductCoins } from '../utils/economy';
+
 var communities = new Hono<{Bindings: Bindings, Variables: Variables}>();
 communities.use("*", authMiddleware);
 async function seedCommunityIfEmpty(prisma: any) {
@@ -50,6 +52,22 @@ communities.get("/posts/all", async (c) => {
     },
     take: 20,
     ...cursor ? { skip: 1, cursor: { id: cursor } } : {},
+    include: {
+      user: { select: { firstName: true, lastName: true, username: true, avatarUrl: true } },
+      community: { select: { name: true } },
+      reactions: true,
+      _count: { select: { comments: true } }
+    },
+    orderBy: { createdAt: "desc" }
+  });
+  return c.json(posts);
+});
+
+communities.get("/posts/user/created", async (c) => {
+  const userId = c.get("userId");
+  const prisma = getPrisma(c.env.DB);
+  const posts = await prisma.post.findMany({
+    where: { userId },
     include: {
       user: { select: { firstName: true, lastName: true, username: true, avatarUrl: true } },
       community: { select: { name: true } },
@@ -135,16 +153,12 @@ communities.get("/recommended", async (c) => {
 communities.post("/", checkCommunityRestriction, async (c) => {
   const userId = c.get("userId");
   const prisma = getPrisma(c.env.DB);
-  const activeSubscription = await prisma.subscription.findFirst({
-    where: {
-      userId,
-      status: "active",
-      expiresAt: { gt: /* @__PURE__ */ new Date() }
-    }
-  });
-  if (!activeSubscription) {
-    return c.json({ error: "You must be subscribed to create a community." }, 403);
+  
+  const economyCheck = await checkAndDeductCoins(c, prisma, userId, 'create_community', 'Created a new community');
+  if (!economyCheck.success) {
+    return c.json({ error: economyCheck.message || "Insufficient coins to create community" }, 403);
   }
+  
   const body = await c.req.json() as any;
   const { name: name2, description, image, guidelines, isPrivate = false } = body;
   if (!name2 || !description) {

@@ -30,6 +30,8 @@ import subscriptions from "./routes/subscriptions";
 import gamificationAdmin from "./routes/gamificationAdmin";
 import badges from "./routes/badges";
 import reports from "./routes/reports";
+import economy from "./routes/economy";
+import settings from "./routes/settings";
 
 import { FCMService } from "./services/fcm";
 import { dispatchNotification } from "./services/notificationService";
@@ -61,6 +63,8 @@ app.route("/api/v1/explore", feed);
 app.route("/api/v1/notifications", notifications);
 app.route("/api/v1/subscriptions", subscriptions);
 app.route("/api/v1/reports", reports);
+app.route("/api/v1/economy", economy);
+app.route("/api/v1/settings", settings);
 app.use("/api/v1/admin/*", csrf());
 app.use("/api/v1/admin/*", adminAuthMiddleware);
 app.route("/api/v1/admin", admin);

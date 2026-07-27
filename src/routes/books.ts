@@ -11,6 +11,7 @@ books.use("*", authMiddleware);
 books.get("/", async (c) => {
   const prisma = getPrisma(c.env.DB);
   const allBooks = await prisma.book.findMany({
+    where: { status: "APPROVED" },
     orderBy: { createdAt: "desc" },
     include: {
       _count: {
@@ -20,6 +21,73 @@ books.get("/", async (c) => {
   });
   return c.json(allBooks);
 });
+
+books.post("/", async (c) => {
+  const userId = c.get("userId");
+  const prisma = getPrisma(c.env.DB);
+  
+  // Only Gold Badge users can upload books
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user || (user.verificationBadge !== "GOLD" && !user.isAdmin)) {
+    return c.json({ error: "Only Gold badge members can submit books." }, 403);
+  }
+
+  let title, author, description, topic, downloadUrl, imageUrl;
+
+  try {
+    const formData = await c.req.formData();
+    title = (formData.get("title") as string) || "Untitled";
+    author = (formData.get("author") as string) || "Unknown";
+    description = (formData.get("description") as string) || "";
+    topic = (formData.get("topic") as string) || "General";
+    
+    const file = formData.get("file");
+    if (file && (file as File).size > 0 && c.env.MEDIA_BUCKET) {
+      const fileKey = `uploads/books-${Date.now()}-${(file as File).name}`;
+      const fileBuffer = await (file as File).arrayBuffer();
+      await c.env.MEDIA_BUCKET.put(fileKey, fileBuffer, {
+        httpMetadata: { contentType: (file as File).type },
+      });
+      const origin = new URL(c.req.url).origin;
+      downloadUrl = `${origin}/api/v1/media/download/${fileKey}`;
+    }
+
+    const thumbnail = formData.get("thumbnail");
+    if (thumbnail && (thumbnail as File).size > 0 && c.env.MEDIA_BUCKET) {
+      const thumbKey = `uploads/books-thumb-${Date.now()}-${(thumbnail as File).name}`;
+      const thumbBuffer = await (thumbnail as File).arrayBuffer();
+      await c.env.MEDIA_BUCKET.put(thumbKey, thumbBuffer, {
+        httpMetadata: { contentType: (thumbnail as File).type },
+      });
+      const origin = new URL(c.req.url).origin;
+      imageUrl = `${origin}/api/v1/media/download/${thumbKey}`;
+    }
+  } catch (e) {
+    const body = await c.req.json();
+    title = body.title;
+    author = body.author || "Unknown";
+    description = body.description || "";
+    topic = body.topic || "General";
+    downloadUrl = body.downloadUrl || "";
+    imageUrl = body.imageUrl || "";
+  }
+
+  const book = await prisma.book.create({ 
+    data: {
+      title,
+      author,
+      description,
+      topic,
+      downloadUrl: downloadUrl || "",
+      imageUrl: imageUrl || "",
+      authorId: userId,
+      status: "PENDING_REVIEW"
+    } 
+  });
+  
+  return c.json({ message: "Book submitted for review successfully", book });
+});
+
 books.get("/saved", async (c) => {
   const prisma = getPrisma(c.env.DB);
   const userId = c.get("userId");
@@ -58,6 +126,19 @@ books.get("/saved", async (c) => {
     hasMore: page * limit < total,
   });
 });
+books.get("/created", async (c) => {
+  const prisma = getPrisma(c.env.DB);
+  const userId = c.get("userId");
+  const myBooks = await prisma.book.findMany({
+    where: { authorId: userId },
+    orderBy: { createdAt: "desc" },
+    include: {
+      _count: { select: { reactions: true, comments: true } }
+    }
+  });
+  return c.json(myBooks);
+});
+
 books.get("/:id", async (c) => {
   const prisma = getPrisma(c.env.DB);
   const bookId = c.req.param("id");
@@ -191,5 +272,105 @@ books.post("/:id/save", async (c) => {
   }
 });
 
+
+books.delete("/:id", async (c) => {
+  const prisma = getPrisma(c.env.DB);
+  const userId = c.get("userId");
+  const bookId = c.req.param("id");
+
+  const book = await prisma.book.findUnique({ where: { id: bookId } });
+  if (!book) return c.json({ error: "Book not found" }, 404);
+  if (book.authorId !== userId) return c.json({ error: "Unauthorized" }, 403);
+
+  await prisma.book.delete({ where: { id: bookId } });
+  return c.json({ message: "Book deleted successfully" });
+});
+
+books.put("/:id", async (c) => {
+  const prisma = getPrisma(c.env.DB);
+  const userId = c.get("userId");
+  const bookId = c.req.param("id");
+
+  const existingBook = await prisma.book.findUnique({ where: { id: bookId } });
+  if (!existingBook) return c.json({ error: "Book not found" }, 404);
+  if (existingBook.authorId !== userId) return c.json({ error: "Unauthorized" }, 403);
+
+  let title, author, description, topic, downloadUrl, imageUrl;
+
+  try {
+    const formData = await c.req.formData();
+    title = (formData.get("title") as string) || existingBook.title;
+    author = (formData.get("author") as string) || existingBook.author;
+    description = (formData.get("description") as string) || existingBook.description;
+    topic = (formData.get("topic") as string) || existingBook.topic;
+
+    const file = formData.get("file");
+    if (file && (file as File).size > 0 && c.env.MEDIA_BUCKET) {
+      const fileKey = `uploads/books-${Date.now()}-${(file as File).name}`;
+      const fileBuffer = await (file as File).arrayBuffer();
+      await c.env.MEDIA_BUCKET.put(fileKey, fileBuffer, {
+        httpMetadata: { contentType: (file as File).type },
+      });
+      const origin = new URL(c.req.url).origin;
+      downloadUrl = `${origin}/api/v1/media/download/${fileKey}`;
+    } else {
+      downloadUrl = existingBook.downloadUrl;
+    }
+
+    const thumbnail = formData.get("thumbnail");
+    if (thumbnail && (thumbnail as File).size > 0 && c.env.MEDIA_BUCKET) {
+      const thumbKey = `uploads/books-thumb-${Date.now()}-${(thumbnail as File).name}`;
+      const thumbBuffer = await (thumbnail as File).arrayBuffer();
+      await c.env.MEDIA_BUCKET.put(thumbKey, thumbBuffer, {
+        httpMetadata: { contentType: (thumbnail as File).type },
+      });
+      const origin = new URL(c.req.url).origin;
+      imageUrl = `${origin}/api/v1/media/download/${thumbKey}`;
+    } else {
+      imageUrl = existingBook.imageUrl;
+    }
+  } catch (e) {
+    const body = await c.req.json();
+    title = body.title !== undefined ? body.title : existingBook.title;
+    author = body.author !== undefined ? body.author : existingBook.author;
+    description = body.description !== undefined ? body.description : existingBook.description;
+    topic = body.topic !== undefined ? body.topic : existingBook.topic;
+    downloadUrl = body.downloadUrl !== undefined ? body.downloadUrl : existingBook.downloadUrl;
+    imageUrl = body.imageUrl !== undefined ? body.imageUrl : existingBook.imageUrl;
+  }
+
+  // Duplicate as pending if previously approved
+  if (existingBook.status === "APPROVED") {
+    const revision = await prisma.book.create({
+      data: {
+        title,
+        author,
+        description,
+        topic,
+        downloadUrl,
+        imageUrl,
+        authorId: userId,
+        status: "PENDING_REVIEW",
+        originalId: existingBook.id
+      }
+    });
+    return c.json({ message: "Book revision submitted for review", book: revision });
+  } else {
+    // If it's already pending/rejected, just update in place
+    const updatedBook = await prisma.book.update({
+      where: { id: bookId },
+      data: {
+        title,
+        author,
+        description,
+        topic,
+        downloadUrl,
+        imageUrl,
+        status: "PENDING_REVIEW"
+      }
+    });
+    return c.json({ message: "Book updated successfully", book: updatedBook });
+  }
+});
 
 export default books;

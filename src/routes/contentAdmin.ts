@@ -7,6 +7,66 @@ import admin from 'firebase-admin';
 // src/routes/contentAdmin.ts
 import { Bindings, Variables } from '../types';
 var contentAdmin = new Hono<{Bindings: Bindings, Variables: Variables}>();
+
+contentAdmin.get("/approvals/pending", async (c) => {
+  const prisma = getPrisma(c.env.DB);
+  
+  const pendingDevotions = await prisma.devotionPlan.findMany({
+    where: { status: "PENDING_REVIEW" },
+    include: { authorUser: { select: { username: true, email: true, firstName: true, lastName: true } } },
+    orderBy: { createdAt: "desc" }
+  });
+  
+  const pendingBooks = await prisma.book.findMany({
+    where: { status: "PENDING_REVIEW" },
+    include: { authorUser: { select: { username: true, email: true, firstName: true, lastName: true } } },
+    orderBy: { createdAt: "desc" }
+  });
+  
+  const mappedDevotions = pendingDevotions.map(d => ({
+    id: d.id,
+    type: "DEVOTION",
+    title: d.title,
+    authorName: d.authorUser ? `${d.authorUser.firstName} ${d.authorUser.lastName}` : d.authorName,
+    submittedAt: d.createdAt
+  }));
+  
+  const mappedBooks = pendingBooks.map(b => ({
+    id: b.id,
+    type: "BOOK",
+    title: b.title,
+    authorName: b.authorUser ? `${b.authorUser.firstName} ${b.authorUser.lastName}` : b.author,
+    submittedAt: b.createdAt
+  }));
+  
+  return c.json([...mappedDevotions, ...mappedBooks].sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime()));
+});
+
+contentAdmin.post("/approvals/:type/:id", async (c) => {
+  const prisma = getPrisma(c.env.DB);
+  const type = c.req.param("type").toUpperCase();
+  const id = c.req.param("id");
+  const body = await c.req.json();
+  const { action } = body; // "APPROVE" or "REJECT"
+  const newStatus = action === "APPROVE" ? "APPROVED" : "REJECTED";
+  
+  if (type === "DEVOTION") {
+    const updated = await prisma.devotionPlan.update({
+      where: { id },
+      data: { status: newStatus }
+    });
+    return c.json({ success: true, status: updated.status });
+  } else if (type === "BOOK") {
+    const updated = await prisma.book.update({
+      where: { id },
+      data: { status: newStatus }
+    });
+    return c.json({ success: true, status: updated.status });
+  }
+  
+  return c.json({ error: "Invalid type" }, 400);
+});
+
 contentAdmin.get("/devotions/plans", async (c) => {
   const prisma = getPrisma(c.env.DB);
   const plans = await prisma.devotionPlan.findMany({
