@@ -5,7 +5,7 @@ import { adminAuthMiddleware } from "../middleware/adminAuth";
 
 const settings = new Hono<{ Bindings: { DB: D1Database } }>();
 
-// Public endpoint to get non-sensitive settings (e.g., OTP enabled)
+// Public endpoint to get non-sensitive settings (e.g., OTP enabled, OTP method)
 settings.get("/public", async (c) => {
   const prisma = getPrisma(c.env.DB);
   let globalSettings = await prisma.globalSettings.findUnique({ where: { id: "default" } });
@@ -18,7 +18,8 @@ settings.get("/public", async (c) => {
   
   return c.json({ 
     settings: {
-      registrationOtpEnabled: globalSettings.registrationOtpEnabled
+      registrationOtpEnabled: globalSettings.registrationOtpEnabled,
+      otpMethod: globalSettings.otpMethod,
     } 
   });
 });
@@ -34,7 +35,9 @@ settings.get("/", authMiddleware, async (c) => {
     });
   }
   
-  return c.json({ settings: globalSettings });
+  // Don't expose SMTP password to regular users
+  const { smtpPass, ...safeSettings } = globalSettings;
+  return c.json({ settings: safeSettings });
 });
 
 // Admin endpoint to update settings
@@ -57,10 +60,18 @@ settings.put("/admin", adminAuthMiddleware, async (c) => {
       devotionVideoSizeLimitMB: body.devotionVideoSizeLimitMB ?? globalSettings.devotionVideoSizeLimitMB,
       devotionVideoDurationLimitSec: body.devotionVideoDurationLimitSec ?? globalSettings.devotionVideoDurationLimitSec,
       registrationOtpEnabled: body.registrationOtpEnabled ?? globalSettings.registrationOtpEnabled,
+      otpMethod: body.otpMethod ?? globalSettings.otpMethod,
+      smtpHost: body.smtpHost ?? globalSettings.smtpHost,
+      smtpPort: body.smtpPort ?? globalSettings.smtpPort,
+      smtpUser: body.smtpUser ?? globalSettings.smtpUser,
+      smtpPass: body.smtpPass ?? globalSettings.smtpPass,
+      smtpFrom: body.smtpFrom ?? globalSettings.smtpFrom,
     }
   });
 
-  return c.json({ message: "Settings updated successfully", settings: updatedSettings });
+  // Don't return smtp password in response
+  const { smtpPass, ...safeUpdatedSettings } = updatedSettings;
+  return c.json({ message: "Settings updated successfully", settings: safeUpdatedSettings });
 });
 
 export default settings;

@@ -911,13 +911,19 @@ model AdminAuditLog {
 }
 
 model GlobalSettings {
-  id                         String   @id @default("default")
-  videoUploadSizeLimitMB     Int      @default(50)
-  videoUploadDurationLimitSec Int     @default(300)
-  audioUploadSizeLimitMB     Int      @default(50)
-  audioUploadDurationLimitSec Int     @default(1800)
-  devotionVideoSizeLimitMB   Int      @default(50)
-  devotionVideoDurationLimitSec Int   @default(300)
-  registrationOtpEnabled     Boolean  @default(true)
-  updatedAt                  DateTime @updatedAt
+  id                            String   @id @default("default")
+  videoUploadSizeLimitMB        Int      @default(50)
+  videoUploadDurationLimitSec   Int      @default(300)
+  audioUploadSizeLimitMB        Int      @default(50)
+  audioUploadDurationLimitSec   Int      @default(1800)
+  devotionVideoSizeLimitMB      Int      @default(50)
+  devotionVideoDurationLimitSec Int      @default(300)
+  registrationOtpEnabled        Boolean  @default(true)
+  otpMethod                     String   @default("twilio") // "twilio" | "smtp"
+  smtpHost                      String?
+  smtpPort                      Int?
+  smtpUser                      String?
+  smtpPass                      String?
+  smtpFrom                      String?
+  updatedAt                     DateTime @updatedAt
 }

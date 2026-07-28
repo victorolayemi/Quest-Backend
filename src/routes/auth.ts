@@ -102,15 +102,18 @@ auth.get("/guest/status", authMiddleware, async (c) => {
 });
 auth.post("/otp/send", async (c) => {
   const body = await c.req.json();
-  const { contact } = body;
+  const { contact, purpose } = body; // purpose: "signup" | "reset"
   if (!contact) {
     return c.json({ error: "Contact field is required" }, 400);
   }
   const prisma = getPrisma(c.env.DB);
   
-  // Check if OTP is enabled
+  // Fetch global settings
   const globalSettings = await prisma.globalSettings.findUnique({ where: { id: "default" } });
-  if (globalSettings && !globalSettings.registrationOtpEnabled) {
+  const otpMethod = globalSettings?.otpMethod ?? "twilio";
+
+  // Only skip OTP for signup when admin has disabled it
+  if (purpose === "signup" && globalSettings && !globalSettings.registrationOtpEnabled) {
     return c.json({
       message: "OTP sent successfully",
       contact,
@@ -129,34 +132,87 @@ auth.post("/otp/send", async (c) => {
       expiresAt
     }
   });
-  if (c.env.TWILIO_ACCOUNT_SID && c.env.TWILIO_AUTH_TOKEN && c.env.TWILIO_PHONE_NUMBER) {
-    const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${c.env.TWILIO_ACCOUNT_SID}/Messages.json`;
-    const authString = btoa(`${c.env.TWILIO_ACCOUNT_SID}:${c.env.TWILIO_AUTH_TOKEN}`);
-    const formData = new URLSearchParams();
-    formData.append("To", contact);
-    formData.append("From", c.env.TWILIO_PHONE_NUMBER);
-    formData.append("Body", `Your Quest verification code is: ${code}`);
+
+  const isEmail = contact.includes("@");
+
+  if (otpMethod === "smtp" && globalSettings?.smtpHost && globalSettings?.smtpUser && globalSettings?.smtpPass) {
+    // Send OTP via SMTP email using Cloudflare Workers-compatible fetch
+    const smtpHost = globalSettings.smtpHost;
+    const smtpPort = globalSettings.smtpPort ?? 587;
+    const smtpUser = globalSettings.smtpUser;
+    const smtpPass = globalSettings.smtpPass;
+    const smtpFrom = globalSettings.smtpFrom ?? smtpUser;
+
+    if (!isEmail) {
+      return c.json({ error: "SMTP OTP delivery requires an email address as contact." }, 400);
+    }
+
+    // Use Mailchannels (free for Workers) or a generic SMTP relay via HTTP API
+    // For Cloudflare Workers (no raw TCP), we use the MailChannels Workers API
     try {
-      const response = await fetch(twilioUrl, {
+      const mailResponse = await fetch("https://api.mailchannels.net/tx/v1/send", {
         method: "POST",
-        headers: {
-          "Authorization": `Basic ${authString}`,
-          "Content-Type": "application/x-www-form-urlencoded"
-        },
-        body: formData.toString()
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          personalizations: [{ to: [{ email: contact }] }],
+          from: { email: smtpFrom },
+          subject: "Your Verification Code",
+          content: [
+            {
+              type: "text/plain",
+              value: `Your Quest verification code is: ${code}\n\nThis code expires in 10 minutes. Do not share it with anyone.`
+            },
+            {
+              type: "text/html",
+              value: `<p>Your <strong>Quest</strong> verification code is:</p><h2 style="letter-spacing:4px">${code}</h2><p>This code expires in 10 minutes. Do not share it with anyone.</p>`
+            }
+          ]
+        })
       });
-      if (!response.ok) {
-        const errText = await response.text();
-        console.error("Twilio Error:", errText);
-        return c.json({ error: "Failed to send OTP SMS. Check your Twilio settings." }, 500);
+      if (!mailResponse.ok && mailResponse.status !== 202) {
+        const errText = await mailResponse.text();
+        console.error("MailChannels Error:", errText);
+        return c.json({ error: "Failed to send OTP email. Check your SMTP settings." }, 500);
       }
     } catch (e) {
-      console.error("Twilio Fetch Error:", e);
-      return c.json({ error: "Failed to communicate with Twilio." }, 500);
+      console.error("SMTP Fetch Error:", e);
+      return c.json({ error: "Failed to send OTP email." }, 500);
     }
-  } else {
-    console.log("OTP sent successfully (Mock/Dev Mode)", code);
+  } else if (otpMethod === "twilio" || !globalSettings?.smtpHost) {
+    // Send OTP via Twilio SMS
+    if (isEmail) {
+      return c.json({ error: "Twilio OTP delivery requires a phone number as contact." }, 400);
+    }
+    if (c.env.TWILIO_ACCOUNT_SID && c.env.TWILIO_AUTH_TOKEN && c.env.TWILIO_PHONE_NUMBER) {
+      const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${c.env.TWILIO_ACCOUNT_SID}/Messages.json`;
+      const authString = btoa(`${c.env.TWILIO_ACCOUNT_SID}:${c.env.TWILIO_AUTH_TOKEN}`);
+      const formData = new URLSearchParams();
+      formData.append("To", contact);
+      formData.append("From", c.env.TWILIO_PHONE_NUMBER);
+      formData.append("Body", `Your Quest verification code is: ${code}`);
+      try {
+        const response = await fetch(twilioUrl, {
+          method: "POST",
+          headers: {
+            "Authorization": `Basic ${authString}`,
+            "Content-Type": "application/x-www-form-urlencoded"
+          },
+          body: formData.toString()
+        });
+        if (!response.ok) {
+          const errText = await response.text();
+          console.error("Twilio Error:", errText);
+          return c.json({ error: "Failed to send OTP SMS. Check your Twilio settings." }, 500);
+        }
+      } catch (e) {
+        console.error("Twilio Fetch Error:", e);
+        return c.json({ error: "Failed to communicate with Twilio." }, 500);
+      }
+    } else {
+      console.log("OTP sent successfully (Mock/Dev Mode)", code);
+    }
   }
+
   return c.json({
     message: "OTP sent successfully",
     contact
