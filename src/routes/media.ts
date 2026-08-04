@@ -296,27 +296,37 @@ media.get("/videos", async (c) => {
 media.get("/videos/continue", authMiddleware, async (c) => {
   const userId = c.get("userId");
   const prisma = getPrisma(c.env.DB);
-  const record = await prisma.playProgress.findFirst({
+  
+  // Workaround for Prisma WASM panic on D1 with complex relational filters + includes.
+  // Fetch recent play progress and filter for VIDEO in memory.
+  const records = await prisma.playProgress.findMany({
     where: {
       userId,
       completed: false,
-      media: { type: "VIDEO" },
     },
     orderBy: { updatedAt: "desc" },
     include: {
-      media: {
-        include: { _count: { select: { mediaLikes: true } } },
-      },
+      media: true,
     },
+    take: 20,
   });
+
+  const record = records.find((r) => r.media && r.media.type === "VIDEO");
   if (!record) return c.json({ item: null });
-  const like = await prisma.mediaLike.findUnique({
-    where: { userId_mediaId: { userId, mediaId: record.mediaId } },
-  });
+
+  const [like, likesCount] = await Promise.all([
+    prisma.mediaLike.findUnique({
+      where: { userId_mediaId: { userId, mediaId: record.mediaId } },
+    }),
+    prisma.mediaLike.count({
+      where: { mediaId: record.mediaId },
+    })
+  ]);
+
   const item = {
     ...record.media,
     hasLiked: !!like,
-    likes: record.media._count.mediaLikes,
+    likes: likesCount,
     _count: void 0,
     progressSeconds: record.progressSeconds,
   };
