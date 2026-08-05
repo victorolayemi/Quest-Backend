@@ -263,9 +263,19 @@ communities.get("/:id", async (c) => {
   const member = await prisma.communityMember.findFirst({
     where: { communityId: id, userId }
   });
+  
+  let hasPendingRequest = false;
+  if (!member && com.isPrivate) {
+    const existingReq = await prisma.communityJoinRequest.findFirst({
+      where: { communityId: id, userId, status: "PENDING" }
+    });
+    hasPendingRequest = !!existingReq;
+  }
+
   return c.json({
     ...com,
     hasJoined: !!member,
+    hasPendingRequest,
     member: member ? {
       role: member.role,
       isSuspended: member.isSuspended,
