@@ -13,7 +13,6 @@
     "jose": "^6.2.3"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20240512.0",
     "@prisma/adapter-d1": "^5.13.0",
     "@types/node": "^25.9.0",
     "prisma": "^5.13.0",

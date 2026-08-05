@@ -296,7 +296,7 @@ media.get("/videos", async (c) => {
 media.get("/videos/continue", authMiddleware, async (c) => {
   const userId = c.get("userId");
   const prisma = getPrisma(c.env.DB);
-  
+
   // Workaround for Prisma WASM panic on D1 with complex relational filters + includes.
   // Fetch recent play progress and filter for VIDEO in memory.
   const records = await prisma.playProgress.findMany({
@@ -320,7 +320,7 @@ media.get("/videos/continue", authMiddleware, async (c) => {
     }),
     prisma.mediaLike.count({
       where: { mediaId: record.mediaId },
-    })
+    }),
   ]);
 
   const item = {
@@ -459,7 +459,12 @@ media.post("/videos/:id/playback", authMiddleware, async (c) => {
         videoReelPoints: { increment: 20 },
       },
     });
-    coinRes = await grantCoins(prisma, userId, 20, "Finished watching a video reel");
+    coinRes = await grantCoins(
+      prisma,
+      userId,
+      20,
+      "Finished watching a video reel",
+    );
   }
   return c.json({ ...record, coinBalance: coinRes?.newBalance });
 });
@@ -697,7 +702,12 @@ media.post("/audio/:id/playback", authMiddleware, async (c) => {
         audioReelPoints: { increment: 20 },
       },
     });
-    coinRes = await grantCoins(prisma, userId, 20, "Finished listening to an audio reel");
+    coinRes = await grantCoins(
+      prisma,
+      userId,
+      20,
+      "Finished listening to an audio reel",
+    );
   }
   return c.json({ ...record, coinBalance: coinRes?.newBalance });
 });
@@ -752,44 +762,76 @@ media.post("/upload", async (c) => {
     return c.json({ error: 'No file provided in form-data key "file"' }, 400);
   }
 
-  let globalSettings = await prisma.globalSettings.findUnique({ where: { id: "default" } });
-  if (!globalSettings) {
-    globalSettings = {
+  const globalSettings =
+    (await prisma.globalSettings.findUnique({ where: { id: "default" } })) ||
+    ({
       videoUploadSizeLimitMB: 50,
       audioUploadSizeLimitMB: 50,
       devotionVideoSizeLimitMB: 50,
       videoUploadDurationLimitSec: 300,
       audioUploadDurationLimitSec: 1800,
       devotionVideoDurationLimitSec: 300,
-    } as any;
-  }
+    } as any);
 
   const fileSizeInMB = (file as File).size / (1024 * 1024);
-  if (type === 'video' && fileSizeInMB > globalSettings.videoUploadSizeLimitMB) {
-    return c.json({ error: `Video file exceeds the limit of ${globalSettings.videoUploadSizeLimitMB}MB.` }, 400);
+  if (
+    type === "video" &&
+    fileSizeInMB > globalSettings.videoUploadSizeLimitMB
+  ) {
+    return c.json(
+      {
+        error: `Video file exceeds the limit of ${globalSettings.videoUploadSizeLimitMB}MB.`,
+      },
+      400,
+    );
   }
-  if (type === 'audio' && fileSizeInMB > globalSettings.audioUploadSizeLimitMB) {
-    return c.json({ error: `Audio file exceeds the limit of ${globalSettings.audioUploadSizeLimitMB}MB.` }, 400);
+  if (
+    type === "audio" &&
+    fileSizeInMB > globalSettings.audioUploadSizeLimitMB
+  ) {
+    return c.json(
+      {
+        error: `Audio file exceeds the limit of ${globalSettings.audioUploadSizeLimitMB}MB.`,
+      },
+      400,
+    );
   }
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { isBanned: true, mediaRestrictionExpiry: true }
+    select: { isBanned: true, mediaRestrictionExpiry: true },
   });
 
   if (user?.isBanned) {
     return c.json({ error: "Your account is banned." }, 403);
   }
 
-  if (user?.mediaRestrictionExpiry && new Date(user.mediaRestrictionExpiry) > new Date()) {
-    return c.json({ error: `Your account is restricted from posting media until ${new Date(user.mediaRestrictionExpiry).toLocaleDateString()}.` }, 403);
+  if (
+    user?.mediaRestrictionExpiry &&
+    new Date(user.mediaRestrictionExpiry) > new Date()
+  ) {
+    return c.json(
+      {
+        error: `Your account is restricted from posting media until ${new Date(user.mediaRestrictionExpiry).toLocaleDateString()}.`,
+      },
+      403,
+    );
   }
 
   if (isReel && !isEdit) {
-    const actionType = type === 'video' ? 'post_video' : 'post_audio';
-    const economyCheck = await checkAndDeductCoins(c, prisma, userId, actionType, `Posted a ${type} reel`);
+    const actionType = type === "video" ? "post_video" : "post_audio";
+    const economyCheck = await checkAndDeductCoins(
+      c,
+      prisma,
+      userId,
+      actionType,
+      `Posted a ${type} reel`,
+    );
     if (!economyCheck.success) {
-      return c.json({ error: economyCheck.message || "Insufficient coins to post media" }, 403);
+      return c.json(
+        { error: economyCheck.message || "Insufficient coins to post media" },
+        403,
+      );
     }
   }
   const fileKey = `uploads/${Date.now()}-${(file as File).name}`;
@@ -871,16 +913,19 @@ media.put("/user/:id", authMiddleware, async (c) => {
   const userId = c.get("userId");
   const mediaId = c.req.param("id");
 
-  const existingMedia = await prisma.userMedia.findUnique({ where: { id: mediaId } });
+  const existingMedia = await prisma.userMedia.findUnique({
+    where: { id: mediaId },
+  });
   if (!existingMedia) return c.json({ error: "Media not found" }, 404);
-  if (existingMedia.userId !== userId) return c.json({ error: "Unauthorized" }, 403);
+  if (existingMedia.userId !== userId)
+    return c.json({ error: "Unauthorized" }, 403);
 
   const reqData = await c.req.json();
   const updatedMedia = await prisma.userMedia.update({
     where: { id: mediaId },
     data: {
       title: reqData.title !== undefined ? reqData.title : existingMedia.title,
-    }
+    },
   });
   return c.json({ message: "Media updated successfully", media: updatedMedia });
 });
@@ -890,9 +935,12 @@ media.delete("/user/:id", authMiddleware, async (c) => {
   const userId = c.get("userId");
   const mediaId = c.req.param("id");
 
-  const existingMedia = await prisma.userMedia.findUnique({ where: { id: mediaId } });
+  const existingMedia = await prisma.userMedia.findUnique({
+    where: { id: mediaId },
+  });
   if (!existingMedia) return c.json({ error: "Media not found" }, 404);
-  if (existingMedia.userId !== userId) return c.json({ error: "Unauthorized" }, 403);
+  if (existingMedia.userId !== userId)
+    return c.json({ error: "Unauthorized" }, 403);
 
   await prisma.userMedia.delete({ where: { id: mediaId } });
   return c.json({ message: "Media deleted successfully" });
