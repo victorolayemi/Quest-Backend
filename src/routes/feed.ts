@@ -2,7 +2,6 @@ import { Hono } from 'hono';
 import { getPrisma } from '../utils/prisma';
 import { authMiddleware } from '../middleware/auth';
 import { adminAuthMiddleware } from '../middleware/adminAuth';
-import admin from 'firebase-admin';
 
 // src/routes/feed.ts
 import { Bindings, Variables } from '../types';

@@ -3,7 +3,6 @@ import { getPrisma } from '../utils/prisma';
 import { authMiddleware } from '../middleware/auth';
 import { grantCoins } from '../utils/economy';
 import { adminAuthMiddleware } from '../middleware/adminAuth';
-import admin from 'firebase-admin';
 
 // src/routes/devotions.ts
 import { Bindings, Variables } from '../types';

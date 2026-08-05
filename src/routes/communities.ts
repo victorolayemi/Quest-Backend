@@ -5,7 +5,6 @@ import { Hono } from 'hono';
 import { getPrisma } from '../utils/prisma';
 import { authMiddleware, checkCommunityRestriction } from '../middleware/auth';
 import { adminAuthMiddleware } from '../middleware/adminAuth';
-import admin from 'firebase-admin';
 
 // src/routes/communities.ts
 import { Bindings, Variables } from '../types';
