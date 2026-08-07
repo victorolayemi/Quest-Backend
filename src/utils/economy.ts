@@ -1,5 +1,7 @@
+
 import { Context } from "hono";
-import { PrismaClient } from "@prisma/client/edge";
+import { eq, inArray, gte, sql, and } from 'drizzle-orm';
+import { user, systemSetting, personalNote, journalEntry, coinTransaction } from '../db/schema';
 
 /**
  * Checks if a user has sufficient coins to perform an action, or if they have unlimited Gold badge,
@@ -8,33 +10,29 @@ import { PrismaClient } from "@prisma/client/edge";
  */
 export async function checkAndDeductCoins(
   c: Context,
-  prisma: PrismaClient,
+  db: any,
   userId: string,
   action: 'create_journal' | 'create_note' | 'post_video' | 'post_audio' | 'create_community',
   description: string
 ): Promise<{ success: boolean; message?: string }> {
   
-  const user = await prisma.user.findUnique({ where: { id: userId } });
-  if (!user) return { success: false, message: "User not found" };
+  const userObj = await db.query.user.findFirst({ where: eq(user.id, userId) });
+  if (!userObj) return { success: false, message: "User not found" };
 
-  // Fetch economy settings
-  const settings = await prisma.systemSetting.findMany({
-    where: {
-      key: {
-        in: ['gold_badge_is_unlimited', 'free_notes_limit', 'free_journals_limit', 'free_limit_period', `cost_${action}`]
-      }
-    }
+  const settingsKeys = ['gold_badge_is_unlimited', 'free_notes_limit', 'free_journals_limit', 'free_limit_period', `cost_${action}`];
+  const settings = await db.query.systemSetting.findMany({
+    where: inArray(systemSetting.key, settingsKeys)
   });
 
   const getSetting = (key: string, defaultValue: string) => {
-    return settings.find(s => s.key === key)?.value || defaultValue;
+    return settings.find((s: any) => s.key === key)?.value || defaultValue;
   };
 
   const isGoldUnlimited = getSetting('gold_badge_is_unlimited', 'true') === 'true';
   const cost = parseInt(getSetting(`cost_${action}`, '0'), 10);
 
   // 1. Unlimited Gold Badge users bypass all costs
-  if (user.verificationBadge === 'GOLD' && isGoldUnlimited) {
+  if (userObj.verificationBadge === 'GOLD' && isGoldUnlimited) {
     return { success: true };
   }
 
@@ -52,16 +50,21 @@ export async function checkAndDeductCoins(
     } else { // DAILY
       dateFilter.setHours(0, 0, 0, 0);
     }
+    const isoDateFilter = dateFilter.toISOString();
 
     let currentCount = 0;
     if (action === 'create_note') {
-      currentCount = await prisma.personalNote.count({
-        where: { userId, createdAt: { gte: dateFilter } }
+      const records = await db.query.personalNote.findMany({
+        where: and(eq(personalNote.userId, userId), gte(personalNote.createdAt, isoDateFilter)),
+        columns: { id: true }
       });
+      currentCount = records.length;
     } else {
-      currentCount = await prisma.journalEntry.count({
-        where: { userId, createdAt: { gte: dateFilter } }
+      const records = await db.query.journalEntry.findMany({
+        where: and(eq(journalEntry.userId, userId), gte(journalEntry.createdAt, isoDateFilter)),
+        columns: { id: true }
       });
+      currentCount = records.length;
     }
 
     if (currentCount < limit) {
@@ -72,55 +75,52 @@ export async function checkAndDeductCoins(
 
   // 3. Coin Deduction
   if (cost > 0) {
-    if (user.coinBalance < cost) {
+    if (userObj.coinBalance < cost) {
       return { success: false, message: "Insufficient coins" };
     }
 
-    // Deduct coins and log transaction
-    await prisma.$transaction([
-      prisma.user.update({
-        where: { id: userId },
-        data: { coinBalance: { decrement: cost } }
-      }),
-      prisma.coinTransaction.create({
-        data: {
-          userId,
-          amount: cost,
-          type: 'SPEND',
-          description: description
-        }
-      })
-    ]);
+    await db.update(user).set({ coinBalance: sql`${user.coinBalance} - ${cost}` }).where(eq(user.id, userId));
+    await db.insert(coinTransaction).values({
+      id: crypto.randomUUID(),
+      userId,
+      amount: cost,
+      type: 'SPEND',
+      description
+    });
   }
 
   return { success: true };
 }
 
+// Alias for backwards compatibility with routes that import the Drizzle variant by name
+export const checkAndDeductCoinsDrizzle = checkAndDeductCoins;
+
 /**
  * Grants coins to a user and logs the transaction.
  */
 export async function grantCoins(
-  prisma: PrismaClient,
+  db: any,
   userId: string,
   amount: number,
   description: string
 ): Promise<{ success: boolean; newBalance?: number }> {
   if (amount <= 0) return { success: true };
 
-  const [user, _] = await prisma.$transaction([
-    prisma.user.update({
-      where: { id: userId },
-      data: { coinBalance: { increment: amount } }
-    }),
-    prisma.coinTransaction.create({
-      data: {
-        userId,
-        amount,
-        type: 'EARN',
-        description
-      }
-    })
-  ]);
+  const [updatedUser] = await db.update(user)
+    .set({ coinBalance: sql`${user.coinBalance} + ${amount}` })
+    .where(eq(user.id, userId))
+    .returning();
 
-  return { success: true, newBalance: user.coinBalance };
+  await db.insert(coinTransaction).values({
+    id: crypto.randomUUID(),
+    userId,
+    amount,
+    type: 'EARN',
+    description
+  });
+
+  return { success: true, newBalance: updatedUser.coinBalance };
 }
+
+// Alias for backwards compatibility with routes that import the Drizzle variant by name
+export const grantCoinsDrizzle = grantCoins;

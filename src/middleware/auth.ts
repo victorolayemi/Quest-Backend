@@ -1,6 +1,6 @@
 import { Context, Next } from 'hono';
 import { verify } from 'hono/jwt';
-import { getPrisma } from '../utils/prisma';
+import { getDrizzle } from '../utils/drizzle';
 import { Bindings, Variables } from '../types';
 
 export async function authMiddleware(c: Context<{Bindings: Bindings, Variables: Variables}>, next: Next) {
@@ -26,10 +26,10 @@ export async function checkCommunityRestriction(c: Context<{Bindings: Bindings, 
   const userId = c.get("userId");
   if (!userId) return c.json({ error: "Unauthorized" }, 401);
   
-  const prisma = getPrisma(c.env.DB);
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { isCommunityRestricted: true }
+  const db = getDrizzle(c.env.DB);
+  const user = await db.query.user.findFirst({
+    where: (users, { eq }) => eq(users.id, userId),
+    columns: { isCommunityRestricted: true }
   });
   
   if (user?.isCommunityRestricted) {
@@ -43,10 +43,10 @@ export async function checkMediaRestriction(c: Context<{Bindings: Bindings, Vari
   const userId = c.get("userId");
   if (!userId) return c.json({ error: "Unauthorized" }, 401);
   
-  const prisma = getPrisma(c.env.DB);
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { mediaRestrictionExpiry: true }
+  const db = getDrizzle(c.env.DB);
+  const user = await db.query.user.findFirst({
+    where: (users, { eq }) => eq(users.id, userId),
+    columns: { mediaRestrictionExpiry: true }
   });
   
   if (user?.mediaRestrictionExpiry && new Date(user.mediaRestrictionExpiry) > new Date()) {

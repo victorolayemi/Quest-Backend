@@ -9,6 +9,7 @@ export type Bindings = {
   TWILIO_ACCOUNT_SID: string;
   TWILIO_AUTH_TOKEN: string;
   TWILIO_PHONE_NUMBER: string;
+  NOTIFICATION_QUEUE: Queue;
 };
 
 export type Variables = {

@@ -1,0 +1,810 @@
+import { sqliteTable, AnySQLiteColumn, text, numeric, integer, foreignKey, uniqueIndex, real } from "drizzle-orm/sqlite-core"
+  import { sql } from "drizzle-orm"
+
+export const prismaMigrations = sqliteTable("_prisma_migrations", {
+	id: text().primaryKey().notNull(),
+	checksum: text().notNull(),
+	finishedAt: numeric("finished_at"),
+	migrationName: text("migration_name").notNull(),
+	logs: text(),
+	rolledBackAt: numeric("rolled_back_at"),
+	startedAt: numeric("started_at").default(sql`(current_timestamp)`).notNull(),
+	appliedStepsCount: integer("applied_steps_count").default(0).notNull(),
+});
+
+export const otpRequest = sqliteTable("OtpRequest", {
+	id: text().primaryKey().notNull(),
+	contact: text().notNull(),
+	code: text().notNull(),
+	expiresAt: numeric().notNull(),
+	verified: integer({ mode: 'boolean' }).default(false).notNull(),
+	userId: text().references(() => user.id, { onDelete: "set null", onUpdate: "cascade" } ),
+});
+
+export const userFeeling = sqliteTable("UserFeeling", {
+	id: text().primaryKey().notNull(),
+	userId: text().notNull().references(() => user.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	feeling: text().notNull(),
+	emoji: text().notNull(),
+	createdAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+},
+(table) => [
+	uniqueIndex("UserFeeling_userId_key").on(table.userId),
+]);
+
+export const friendRequest = sqliteTable("FriendRequest", {
+	id: text().primaryKey().notNull(),
+	senderId: text().notNull().references(() => user.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	receiverId: text().notNull().references(() => user.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	status: text().default("PENDING").notNull(),
+	createdAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+});
+
+export const directChat = sqliteTable("DirectChat", {
+	id: text().primaryKey().notNull(),
+	user1Id: text().notNull().references(() => user.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	user2Id: text().notNull().references(() => user.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	createdAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+});
+
+export const directMessage = sqliteTable("DirectMessage", {
+	id: text().primaryKey().notNull(),
+	chatId: text().notNull().references(() => directChat.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	senderId: text().notNull().references(() => user.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	text: text().notNull(),
+	image: text(),
+	isRead: integer({ mode: 'boolean' }).default(false).notNull(),
+	createdAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+});
+
+export const chatPin = sqliteTable("ChatPin", {
+	id: text().primaryKey().notNull(),
+	chatId: text().notNull().references(() => directChat.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	userId: text().notNull(),
+	pinnedAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+});
+
+export const journalEntry = sqliteTable("JournalEntry", {
+	id: text().primaryKey().notNull(),
+	userId: text().notNull().references(() => user.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	title: text().notNull(),
+	bodyText: text().notNull(),
+	feelings: text().notNull(),
+	verses: text(),
+	createdAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+});
+
+export const personalNote = sqliteTable("PersonalNote", {
+	id: text().primaryKey().notNull(),
+	userId: text().notNull().references(() => user.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	title: text().notNull(),
+	bodyText: text().notNull(),
+	isFavorite: integer({ mode: 'boolean' }).default(false).notNull(),
+	images: text().notNull(),
+	createdAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+	verses: text(),
+});
+
+export const post = sqliteTable("Post", {
+	id: text().primaryKey().notNull(),
+	communityId: text().notNull().references(() => community.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	userId: text().notNull().references(() => user.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	text: text().notNull(),
+	image: text(),
+	createdAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+});
+
+export const postReaction = sqliteTable("PostReaction", {
+	id: text().primaryKey().notNull(),
+	postId: text().notNull().references(() => post.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	userId: text().notNull().references(() => user.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	emoji: text().notNull(),
+	createdAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+});
+
+export const communityEvent = sqliteTable("CommunityEvent", {
+	id: text().primaryKey().notNull(),
+	communityId: text().notNull().references(() => community.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	title: text().notNull(),
+	description: text().notNull(),
+	date: text().notNull(),
+	time: text().notNull(),
+	location: text().notNull(),
+	createdAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+	imageUrl: text(),
+	link: text(),
+});
+
+export const eventAttendee = sqliteTable("EventAttendee", {
+	id: text().primaryKey().notNull(),
+	eventId: text().notNull().references(() => communityEvent.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	userId: text().notNull().references(() => user.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	joined: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+});
+
+export const groupMessage = sqliteTable("GroupMessage", {
+	id: text().primaryKey().notNull(),
+	communityId: text().notNull().references(() => community.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	senderId: text().notNull().references(() => user.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	text: text().notNull(),
+	createdAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+	imageUrl: text(),
+	audioThumbnail: text(),
+	audioUrl: text(),
+	videoThumbnail: text(),
+	videoUrl: text(),
+});
+
+export const bibleBookmark = sqliteTable("BibleBookmark", {
+	id: text().primaryKey().notNull(),
+	userId: text().notNull().references(() => user.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	verseRef: text().notNull(),
+	createdAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+});
+
+export const bibleHighlight = sqliteTable("BibleHighlight", {
+	id: text().primaryKey().notNull(),
+	userId: text().notNull().references(() => user.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	verseRef: text().notNull(),
+	color: text().notNull(),
+	createdAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+});
+
+export const bibleNote = sqliteTable("BibleNote", {
+	id: text().primaryKey().notNull(),
+	userId: text().notNull().references(() => user.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	verseRef: text().notNull(),
+	noteText: text().notNull(),
+	createdAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+});
+
+export const bibleReadingHistory = sqliteTable("BibleReadingHistory", {
+	id: text().primaryKey().notNull(),
+	userId: text().notNull().references(() => user.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	verseRef: text().notNull(),
+	readAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+});
+
+export const devotionDay = sqliteTable("DevotionDay", {
+	id: text().primaryKey().notNull(),
+	planId: text().notNull().references(() => devotionPlan.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	dayNumber: integer().notNull(),
+	title: text().notNull(),
+	bodyText: text().notNull(),
+	image: text(),
+	pointsEarned: integer().default(20).notNull(),
+	likesCount: integer().default(0).notNull(),
+	createdAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+	videoUrl: text(),
+});
+
+export const userPlanProgress = sqliteTable("UserPlanProgress", {
+	id: text().primaryKey().notNull(),
+	userId: text().notNull().references(() => user.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	planId: text().notNull(),
+	currentDay: integer().default(1).notNull(),
+	reminderTime: text().default("09:41 AM").notNull(),
+	reminderEnabled: integer({ mode: 'boolean' }).default(true).notNull(),
+	startedAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+	completedAt: numeric(),
+});
+
+export const playProgress = sqliteTable("PlayProgress", {
+	id: text().primaryKey().notNull(),
+	userId: text().notNull().references(() => user.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	mediaId: text().notNull().references(() => sermonMedia.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	progressSeconds: integer().default(0).notNull(),
+	completed: integer({ mode: 'boolean' }).default(false).notNull(),
+	updatedAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+});
+
+export const quiz = sqliteTable("Quiz", {
+	id: text().primaryKey().notNull(),
+	title: text().notNull(),
+	category: text().notNull(),
+	difficulty: text().notNull(),
+	points: integer().default(50).notNull(),
+	createdAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+});
+
+export const question = sqliteTable("Question", {
+	id: text().primaryKey().notNull(),
+	quizId: text().notNull().references(() => quiz.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	questionText: text().notNull(),
+	options: text().notNull(),
+	correctAnswerIndex: integer().notNull(),
+	points: integer().default(10).notNull(),
+});
+
+export const quizAttempt = sqliteTable("QuizAttempt", {
+	id: text().primaryKey().notNull(),
+	userId: text().notNull().references(() => user.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	quizId: text().notNull().references(() => quiz.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	score: integer().notNull(),
+	pointsEarned: integer().notNull(),
+	completedAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+});
+
+export const dailyBread = sqliteTable("DailyBread", {
+	id: text().primaryKey().notNull(),
+	date: text().notNull(),
+	puzzleData: text().notNull(),
+	solution: text().notNull(),
+},
+(table) => [
+	uniqueIndex("DailyBread_date_key").on(table.date),
+]);
+
+export const dailyBreadAttempt = sqliteTable("DailyBreadAttempt", {
+	id: text().primaryKey().notNull(),
+	userId: text().notNull().references(() => user.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	dailyBreadId: text().notNull().references(() => dailyBread.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	solved: integer({ mode: 'boolean' }).default(false).notNull(),
+	streakAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+	createdAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+});
+
+export const challenge = sqliteTable("Challenge", {
+	id: text().primaryKey().notNull(),
+	creatorId: text().notNull().references(() => user.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	opponentId: text().references(() => user.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	quizId: text().notNull(),
+	type: text().notNull(),
+	status: text().default("PENDING").notNull(),
+	inviteCode: text().notNull(),
+	createdAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+},
+(table) => [
+	uniqueIndex("Challenge_inviteCode_key").on(table.inviteCode),
+]);
+
+export const challengeParticipant = sqliteTable("ChallengeParticipant", {
+	id: text().primaryKey().notNull(),
+	challengeId: text().notNull().references(() => challenge.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	userId: text().notNull().references(() => user.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	score: integer().default(0).notNull(),
+	completed: integer({ mode: 'boolean' }).default(false).notNull(),
+});
+
+export const badge = sqliteTable("Badge", {
+	id: text().primaryKey().notNull(),
+	name: text().notNull(),
+	description: text().notNull(),
+	imageUrl: text().notNull(),
+	criteriaType: text().notNull(),
+	criteriaValue: integer().notNull(),
+},
+(table) => [
+	uniqueIndex("Badge_name_key").on(table.name),
+]);
+
+export const earnedBadge = sqliteTable("EarnedBadge", {
+	id: text().primaryKey().notNull(),
+	userId: text().notNull().references(() => user.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	badgeId: text().notNull().references(() => badge.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	earnedAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+});
+
+export const notification = sqliteTable("Notification", {
+	id: text().primaryKey().notNull(),
+	userId: text().notNull().references(() => user.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	title: text().notNull(),
+	message: text().notNull(),
+	type: text().default("SYSTEM").notNull(),
+	isRead: integer({ mode: 'boolean' }).default(false).notNull(),
+	createdAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+});
+
+export const appFeature = sqliteTable("AppFeature", {
+	id: text().primaryKey().notNull(),
+	key: text().notNull(),
+	isEnabled: integer({ mode: 'boolean' }).default(true).notNull(),
+	createdAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+	updatedAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+	value: text(),
+},
+(table) => [
+	uniqueIndex("AppFeature_key_key").on(table.key),
+]);
+
+export const loginHistory = sqliteTable("LoginHistory", {
+	id: text().primaryKey().notNull(),
+	userId: text().notNull().references(() => user.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	ip: text(),
+	browser: text(),
+	os: text(),
+	createdAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+});
+
+export const wordMatchQuestion = sqliteTable("WordMatchQuestion", {
+	id: text().primaryKey().notNull(),
+	word: text().notNull(),
+	match: text().notNull(),
+	difficulty: text().default("easy").notNull(),
+	createdAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+	updatedAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+});
+
+export const wordCrossQuestion = sqliteTable("WordCrossQuestion", {
+	id: text().primaryKey().notNull(),
+	word: text().notNull(),
+	clue: text().notNull(),
+	difficulty: text().default("easy").notNull(),
+	createdAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+	updatedAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+});
+
+export const gameSettings = sqliteTable("GameSettings", {
+	id: text().primaryKey().notNull(),
+	gameType: text().notNull(),
+	totalQuestions: integer().default(10).notNull(),
+	durationSecs: integer().default(60).notNull(),
+	createdAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+	updatedAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+},
+(table) => [
+	uniqueIndex("GameSettings_gameType_key").on(table.gameType),
+]);
+
+export const gameScore = sqliteTable("GameScore", {
+	id: text().primaryKey().notNull(),
+	userId: text().notNull().references(() => user.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	gameType: text().notNull(),
+	difficulty: text().notNull(),
+	score: integer().notNull(),
+	createdAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+});
+
+export const dailyVerseStat = sqliteTable("DailyVerseStat", {
+	id: text().primaryKey().notNull(),
+	date: text().notNull(),
+	likes: integer().default(0).notNull(),
+	shares: integer().default(0).notNull(),
+	comments: integer().default(0).notNull(),
+},
+(table) => [
+	uniqueIndex("DailyVerseStat_date_key").on(table.date),
+]);
+
+export const dailyVerseLike = sqliteTable("DailyVerseLike", {
+	id: text().primaryKey().notNull(),
+	userId: text().notNull().references(() => user.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	date: text().notNull(),
+	createdAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+},
+(table) => [
+	uniqueIndex("DailyVerseLike_userId_date_key").on(table.userId, table.date),
+]);
+
+export const bibleQuizQuestion = sqliteTable("BibleQuizQuestion", {
+	id: text().primaryKey().notNull(),
+	questionText: text().notNull(),
+	options: text().notNull(),
+	correctAnswerIndex: integer().notNull(),
+	level: integer().default(1).notNull(),
+	createdAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+	updatedAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+});
+
+export const bookComment = sqliteTable("BookComment", {
+	id: text().primaryKey().notNull(),
+	content: text().notNull(),
+	bookId: text().notNull().references(() => book.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	userId: text().notNull().references(() => user.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	createdAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+});
+
+export const bookReaction = sqliteTable("BookReaction", {
+	id: text().primaryKey().notNull(),
+	bookId: text().notNull().references(() => book.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	userId: text().notNull().references(() => user.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	emoji: text().notNull(),
+	createdAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+},
+(table) => [
+	uniqueIndex("BookReaction_bookId_userId_emoji_key").on(table.bookId, table.userId, table.emoji),
+]);
+
+export const mediaLike = sqliteTable("MediaLike", {
+	id: text().primaryKey().notNull(),
+	userId: text().notNull().references(() => user.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	mediaId: text().notNull().references(() => sermonMedia.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	createdAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+},
+(table) => [
+	uniqueIndex("MediaLike_userId_mediaId_key").on(table.userId, table.mediaId),
+]);
+
+export const postReport = sqliteTable("PostReport", {
+	id: text().primaryKey().notNull(),
+	postId: text().notNull().references(() => post.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	userId: text().notNull().references(() => user.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	reason: text().notNull(),
+	createdAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+});
+
+export const commentReaction = sqliteTable("CommentReaction", {
+	id: text().primaryKey().notNull(),
+	commentId: text().notNull().references(() => comment.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	userId: text().notNull().references(() => user.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	emoji: text().default("👍").notNull(),
+	createdAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+},
+(table) => [
+	uniqueIndex("CommentReaction_userId_commentId_key").on(table.userId, table.commentId),
+]);
+
+export const comment = sqliteTable("Comment", {
+	id: text().primaryKey().notNull(),
+	postId: text().notNull().references(() => post.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	userId: text().notNull().references(() => user.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	parentId: text(),
+	text: text().notNull(),
+	createdAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+},
+(table) => [
+	foreignKey(() => ({
+			columns: [table.parentId],
+			foreignColumns: [table.id],
+			name: "Comment_parentId_Comment_id_fk"
+		})).onUpdate("cascade").onDelete("cascade"),
+]);
+
+export const sermonMedia = sqliteTable("SermonMedia", {
+	id: text().primaryKey().notNull(),
+	title: text().notNull(),
+	author: text().notNull(),
+	mediaUrl: text().notNull(),
+	imageUrl: text().notNull(),
+	type: text().notNull(),
+	duration: text().notNull(),
+	category: text().notNull(),
+	createdAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+});
+
+export const chatClear = sqliteTable("ChatClear", {
+	id: text().primaryKey().notNull(),
+	chatId: text().notNull().references(() => directChat.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	userId: text().notNull().references(() => user.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	clearedAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+},
+(table) => [
+	uniqueIndex("ChatClear_chatId_userId_key").on(table.chatId, table.userId),
+]);
+
+export const devotionDayLike = sqliteTable("DevotionDayLike", {
+	id: text().primaryKey().notNull(),
+	userId: text().notNull().references(() => user.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	dayId: text().notNull().references(() => devotionDay.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	createdAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+},
+(table) => [
+	uniqueIndex("DevotionDayLike_userId_dayId_key").on(table.userId, table.dayId),
+]);
+
+export const affirmation = sqliteTable("Affirmation", {
+	id: text().primaryKey().notNull(),
+	feeling: text(),
+	text: text().notNull(),
+	createdAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+});
+
+export const subscription = sqliteTable("Subscription", {
+	id: text().primaryKey().notNull(),
+	userId: text().notNull().references(() => user.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	platform: text().notNull(),
+	status: text().notNull(),
+	originalTxId: text().notNull(),
+	productId: text().notNull(),
+	expiresAt: numeric().notNull(),
+	isAutoRenewing: integer({ mode: 'boolean' }).default(true).notNull(),
+	createdAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+	updatedAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+},
+(table) => [
+	uniqueIndex("Subscription_originalTxId_key").on(table.originalTxId),
+]);
+
+export const userMedia = sqliteTable("UserMedia", {
+	id: text().primaryKey().notNull(),
+	userId: text().notNull().references(() => user.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	title: text().notNull(),
+	mediaUrl: text().notNull(),
+	type: text().notNull(),
+	createdAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+	updatedAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+	imageUrl: text(),
+});
+
+export const communityJoinRequest = sqliteTable("CommunityJoinRequest", {
+	id: text().primaryKey().notNull(),
+	communityId: text().notNull().references(() => community.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	userId: text().notNull().references(() => user.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	status: text().default("PENDING").notNull(),
+	createdAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+});
+
+export const community = sqliteTable("Community", {
+	id: text().primaryKey().notNull(),
+	name: text().notNull(),
+	description: text().notNull(),
+	image: text(),
+	guidelines: text(),
+	isPrivate: integer({ mode: 'boolean' }).default(false).notNull(),
+	isForumDisabledGlobally: integer({ mode: 'boolean' }).default(false).notNull(),
+	createdAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+	creatorId: text().references(() => user.id, { onDelete: "set null", onUpdate: "cascade" } ),
+},
+(table) => [
+	uniqueIndex("Community_name_key").on(table.name),
+]);
+
+export const communityMember = sqliteTable("CommunityMember", {
+	id: text().primaryKey().notNull(),
+	communityId: text().notNull().references(() => community.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	userId: text().notNull().references(() => user.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	role: text().default("MEMBER").notNull(),
+	isSuspended: integer({ mode: 'boolean' }).default(false).notNull(),
+	canPostForum: integer({ mode: 'boolean' }).default(true).notNull(),
+	joinedAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+});
+
+export const communityMessageLike = sqliteTable("CommunityMessageLike", {
+	id: text().primaryKey().notNull(),
+	userId: text().notNull().references(() => user.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	messageId: text().notNull().references(() => communityMessage.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	createdAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+},
+(table) => [
+	uniqueIndex("CommunityMessageLike_userId_messageId_key").on(table.userId, table.messageId),
+]);
+
+export const communityMessageBookmark = sqliteTable("CommunityMessageBookmark", {
+	id: text().primaryKey().notNull(),
+	userId: text().notNull().references(() => user.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	messageId: text().notNull().references(() => communityMessage.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	createdAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+},
+(table) => [
+	uniqueIndex("CommunityMessageBookmark_userId_messageId_key").on(table.userId, table.messageId),
+]);
+
+export const communityMessageComment = sqliteTable("CommunityMessageComment", {
+	id: text().primaryKey().notNull(),
+	userId: text().notNull().references(() => user.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	messageId: text().notNull().references(() => communityMessage.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	text: text().notNull(),
+	parentId: text(),
+	createdAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+	likesCount: integer().default(0).notNull(),
+},
+(table) => [
+	foreignKey(() => ({
+			columns: [table.parentId],
+			foreignColumns: [table.id],
+			name: "CommunityMessageComment_parentId_CommunityMessageComment_id_fk"
+		})).onUpdate("cascade").onDelete("cascade"),
+]);
+
+export const savedBook = sqliteTable("SavedBook", {
+	id: text().primaryKey().notNull(),
+	userId: text().notNull().references(() => user.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	bookId: text().notNull().references(() => book.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	createdAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+},
+(table) => [
+	uniqueIndex("SavedBook_userId_bookId_key").on(table.userId, table.bookId),
+]);
+
+export const communityDailyVerse = sqliteTable("CommunityDailyVerse", {
+	id: text().primaryKey().notNull(),
+	communityId: text().notNull().references(() => community.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	date: text().notNull(),
+	reference: text().notNull(),
+	text: text().notNull(),
+	explanation: text(),
+	likesCount: integer().default(0).notNull(),
+	sharesCount: integer().default(0).notNull(),
+	commentsCount: integer().default(0).notNull(),
+	createdAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+},
+(table) => [
+	uniqueIndex("CommunityDailyVerse_communityId_date_key").on(table.communityId, table.date),
+]);
+
+export const communityDailyVerseLike = sqliteTable("CommunityDailyVerseLike", {
+	id: text().primaryKey().notNull(),
+	userId: text().notNull().references(() => user.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	verseId: text().notNull().references(() => communityDailyVerse.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	createdAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+},
+(table) => [
+	uniqueIndex("CommunityDailyVerseLike_userId_verseId_key").on(table.userId, table.verseId),
+]);
+
+export const communityMessageReaction = sqliteTable("CommunityMessageReaction", {
+	id: text().primaryKey().notNull(),
+	userId: text().notNull().references(() => user.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	messageId: text().notNull().references(() => communityMessage.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	emoji: text().notNull(),
+	createdAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+},
+(table) => [
+	uniqueIndex("CommunityMessageReaction_userId_messageId_emoji_key").on(table.userId, table.messageId, table.emoji),
+]);
+
+export const communityMessageCommentLike = sqliteTable("CommunityMessageCommentLike", {
+	id: text().primaryKey().notNull(),
+	userId: text().notNull().references(() => user.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	commentId: text().notNull().references(() => communityMessageComment.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	createdAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+},
+(table) => [
+	uniqueIndex("CommunityMessageCommentLike_userId_commentId_key").on(table.userId, table.commentId),
+]);
+
+export const communityMessage = sqliteTable("CommunityMessage", {
+	id: text().primaryKey().notNull(),
+	communityId: text().notNull().references(() => community.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	senderId: text().notNull().references(() => user.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	text: text().notNull(),
+	title: text(),
+	imageUrl: text(),
+	videoUrl: text(),
+	videoThumbnail: text(),
+	audioUrl: text(),
+	audioThumbnail: text(),
+	likesCount: integer().default(0).notNull(),
+	commentsCount: integer().default(0).notNull(),
+	sharesCount: integer().default(0).notNull(),
+	bookmarksCount: integer().default(0).notNull(),
+	createdAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+});
+
+export const report = sqliteTable("Report", {
+	id: text().primaryKey().notNull(),
+	userId: text().notNull().references(() => user.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	itemType: text().notNull(),
+	itemId: text().notNull(),
+	reportedUserId: text(),
+	reason: text().notNull(),
+	details: text(),
+	attachedMessages: text(),
+	status: text().default("PENDING").notNull(),
+	createdAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+});
+
+export const systemSetting = sqliteTable("SystemSetting", {
+	key: text().primaryKey().notNull(),
+	value: text().notNull(),
+});
+
+export const coinTransaction = sqliteTable("CoinTransaction", {
+	id: text().primaryKey().notNull(),
+	userId: text().notNull().references(() => user.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	amount: integer().notNull(),
+	type: text().notNull(),
+	description: text().notNull(),
+	createdAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+});
+
+export const coinPackage = sqliteTable("CoinPackage", {
+	id: text().primaryKey().notNull(),
+	amount: integer().notNull(),
+	price: real().notNull(),
+	validityDays: integer(),
+	storeProductId: text(),
+	createdAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+});
+
+export const adminAuditLog = sqliteTable("AdminAuditLog", {
+	id: text().primaryKey().notNull(),
+	adminId: text().notNull(),
+	targetId: text().notNull(),
+	action: text().notNull(),
+	reason: text().notNull(),
+	createdAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+});
+
+export const book = sqliteTable("Book", {
+	id: text().primaryKey().notNull(),
+	title: text().notNull(),
+	author: text().notNull(),
+	description: text(),
+	imageUrl: text(),
+	downloadUrl: text(),
+	topic: text(),
+	createdAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+	updatedAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+	status: text().default("APPROVED").notNull(),
+	authorId: text().references(() => user.id, { onDelete: "set null", onUpdate: "cascade" } ),
+	originalId: text(),
+});
+
+export const devotionPlan = sqliteTable("DevotionPlan", {
+	id: text().primaryKey().notNull(),
+	title: text().notNull(),
+	description: text().notNull(),
+	image: text(),
+	durationDays: integer().notNull(),
+	authorName: text().notNull(),
+	authorHandle: text().notNull(),
+	tag: text().notNull(),
+	createdAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+	status: text().default("APPROVED").notNull(),
+	authorId: text().references(() => user.id, { onDelete: "set null", onUpdate: "cascade" } ),
+	originalId: text(),
+});
+
+export const user = sqliteTable("User", {
+	id: text().primaryKey().notNull(),
+	email: text(),
+	phoneNumber: text(),
+	password: text(),
+	firstName: text(),
+	lastName: text(),
+	username: text(),
+	gender: text(),
+	avatarUrl: text(),
+	bio: text(),
+	points: integer().default(0).notNull(),
+	devotionPoints: integer().default(0).notNull(),
+	dailyBreadPoints: integer().default(0).notNull(),
+	audioReelPoints: integer().default(0).notNull(),
+	videoReelPoints: integer().default(0).notNull(),
+	quizPoints: integer().default(0).notNull(),
+	streakCount: integer().default(0).notNull(),
+	isGuest: integer({ mode: 'boolean' }).default(false).notNull(),
+	isAdmin: integer({ mode: 'boolean' }).default(false).notNull(),
+	isBanned: integer({ mode: 'boolean' }).default(false).notNull(),
+	location: text(),
+	appearance: text().default("system").notNull(),
+	soundAlerts: integer({ mode: 'boolean' }).default(true).notNull(),
+	hapticFeedback: integer({ mode: 'boolean' }).default(true).notNull(),
+	music: integer({ mode: 'boolean' }).default(true).notNull(),
+	allNotifications: integer({ mode: 'boolean' }).default(true).notNull(),
+	inAppNotifications: integer({ mode: 'boolean' }).default(true).notNull(),
+	pushDirectMessages: integer({ mode: 'boolean' }).default(true).notNull(),
+	pushCommunityPosts: integer({ mode: 'boolean' }).default(true).notNull(),
+	pushCommunityForum: integer({ mode: 'boolean' }).default(true).notNull(),
+	pushConnectionRequests: integer({ mode: 'boolean' }).default(true).notNull(),
+	pushConnectionAccepted: integer({ mode: 'boolean' }).default(true).notNull(),
+	doNotDisturb: integer({ mode: 'boolean' }).default(false).notNull(),
+	autoScroll: integer({ mode: 'boolean' }).default(false).notNull(),
+	reminderMorning: integer({ mode: 'boolean' }).default(false).notNull(),
+	reminderAfternoon: integer({ mode: 'boolean' }).default(false).notNull(),
+	reminderEvening: integer({ mode: 'boolean' }).default(false).notNull(),
+	reminderCustomTime: text(),
+	createdAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+	updatedAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+	fcmToken: text(),
+	bibleQuizLevel: integer().default(1).notNull(),
+	isCommunityRestricted: integer({ mode: 'boolean' }).default(false).notNull(),
+	mediaRestrictionExpiry: numeric(),
+	verificationBadge: text().default("NONE").notNull(),
+	coinBalance: integer().default(0).notNull(),
+},
+(table) => [
+	uniqueIndex("User_username_key").on(table.username),
+	uniqueIndex("User_phoneNumber_key").on(table.phoneNumber),
+	uniqueIndex("User_email_key").on(table.email),
+]);
+
+export const globalSettings = sqliteTable("GlobalSettings", {
+	id: text().default("default").primaryKey().notNull(),
+	videoUploadSizeLimitMB: integer().default(50).notNull(),
+	videoUploadDurationLimitSec: integer().default(300).notNull(),
+	audioUploadSizeLimitMB: integer().default(50).notNull(),
+	audioUploadDurationLimitSec: integer().default(1800).notNull(),
+	devotionVideoSizeLimitMB: integer().default(50).notNull(),
+	devotionVideoDurationLimitSec: integer().default(300).notNull(),
+	registrationOtpEnabled: integer({ mode: 'boolean' }).default(true).notNull(),
+	otpMethod: text().default("twilio").notNull(),
+	smtpHost: text(),
+	smtpPort: integer(),
+	smtpUser: text(),
+	smtpPass: text(),
+	smtpFrom: text(),
+	updatedAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+});
+

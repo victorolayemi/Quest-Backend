@@ -35,13 +35,23 @@ import settings from "./routes/settings";
 
 import { FCMService } from "./services/fcm";
 import { dispatchNotification } from "./services/notificationService";
-import { getPrisma } from "./utils/prisma";
+import { getDrizzle } from "./utils/drizzle";
+import { user as userTable, loginHistory } from "./db/schema";
+import { isNotNull, notInArray, gt, sql } from "drizzle-orm";
 
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import { formatDates } from "./utils/format";
 
 // src/index.ts
 var app = new Hono();
+app.use('*', async (c, next) => {
+  const originalJson = c.json;
+  c.json = function (obj: any, ...args: any[]) {
+    return originalJson.call(this, formatDates(obj), ...args);
+  } as any;
+  await next();
+});
 app.use("*", cors());
 app.route("/api/v1/auth", auth);
 app.route("/api/v1/users", users);
@@ -178,56 +188,74 @@ var index_default = {
   fetch: app.fetch,
   async scheduled(event, env, ctx) {
     console.log(`Cron triggered: ${event.cron}`);
-    const prisma = getPrisma(env.DB);
-    const fiveDaysAgo = /* @__PURE__ */ new Date();
+    const db = getDrizzle(env.DB);
+    const fiveDaysAgo = new Date();
     fiveDaysAgo.setDate(fiveDaysAgo.getDate() - 5);
-    const sevenDaysAgo = /* @__PURE__ */ new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    const fiveDaysAgoStr = fiveDaysAgo.toISOString();
     try {
-      const inactiveUsers = await prisma.user.findMany({
-        where: {
-          fcmToken: { not: null },
-          // A simple approximation: if they haven't had login history recently,
-          // or their createdAt is old and they have no recent history.
-          // In a fully robust system, you'd track `lastActiveAt` on the User model.
-          loginHistory: {
-            none: {
-              createdAt: {
-                gte: fiveDaysAgo,
-              },
-            },
-          },
-        },
-        select: { id: true, fcmToken: true },
-      });
-      if (inactiveUsers.length === 0) return;
-      if (!env.FIREBASE_CLIENT_EMAIL || !env.FIREBASE_PRIVATE_KEY) {
-        console.error("Firebase credentials missing for cron job");
-        return;
+      // Find users with fcmToken who have NOT logged in in the last 5 days
+      const recentlyActiveUserIds = await db
+        .select({ userId: loginHistory.userId })
+        .from(loginHistory)
+        .where(gt(loginHistory.createdAt, fiveDaysAgoStr));
+
+      const activeIds = recentlyActiveUserIds.map((r: any) => r.userId);
+
+      const inactiveUsers = await db
+        .select({ id: userTable.id, fcmToken: userTable.fcmToken })
+        .from(userTable)
+        .where(
+          activeIds.length > 0
+            ? notInArray(userTable.id, activeIds) 
+            : isNotNull(userTable.fcmToken)
+        );
+
+      const filteredInactive = inactiveUsers.filter((u: any) => u.fcmToken !== null);
+      if (filteredInactive.length === 0) return;
+      
+      const usersToNotify = filteredInactive.slice(0, 100);
+      
+      // Dispatch to Queue instead of sending synchronously
+      const messages = usersToNotify.map(u => ({
+        body: { userId: u.id, fcmToken: u.fcmToken }
+      }));
+      
+      // Send in batches of 100 to the queue
+      for (let i = 0; i < messages.length; i += 100) {
+        await env.NOTIFICATION_QUEUE.sendBatch(messages.slice(i, i + 100));
       }
-      const fcm = new FCMService(
-        env.FIREBASE_CLIENT_EMAIL,
-        env.FIREBASE_PRIVATE_KEY,
-      );
-      const usersToNotify = inactiveUsers.slice(0, 100);
-      await Promise.all(
-        usersToNotify.map(async (u) => {
-          try {
-            await fcm.sendNotification({
-              token: u.fcmToken,
-              notification: {
-                title: "We miss you! \u{1F44B}",
-                body: "Come back and continue your spiritual journey with Quest.",
-              },
-            });
-          } catch (e) {
-            console.error(`Failed to notify user ${u.id}:`, e);
-          }
-        }),
-      );
+      
     } catch (error) {
       console.error("Error in scheduled notification job:", error);
     }
   },
+  async queue(batch: any, env: any, ctx: any) {
+    if (!env.FIREBASE_CLIENT_EMAIL || !env.FIREBASE_PRIVATE_KEY) {
+      console.error("Firebase credentials missing for queue job");
+      return;
+    }
+    const fcm = new FCMService(
+      env.FIREBASE_CLIENT_EMAIL,
+      env.FIREBASE_PRIVATE_KEY,
+    );
+
+    await Promise.all(
+      batch.messages.map(async (msg: any) => {
+        try {
+          await fcm.sendNotification({
+            token: msg.body.fcmToken,
+            notification: {
+              title: "We miss you! \u{1F44B}",
+              body: "Come back and continue your spiritual journey with Quest.",
+            },
+          });
+          msg.ack();
+        } catch (e) {
+          console.error(`Failed to notify user ${msg.body.userId}:`, e);
+          msg.retry();
+        }
+      })
+    );
+  }
 };
 export default index_default;

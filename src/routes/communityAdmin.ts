@@ -1,28 +1,44 @@
 import { Hono } from 'hono';
-import { getPrisma } from '../utils/prisma';
-import { authMiddleware } from '../middleware/auth';
-import { adminAuthMiddleware } from '../middleware/adminAuth';
-
-// src/routes/communityAdmin.ts
+import { getDrizzle } from '../utils/drizzle';
 import { Bindings, Variables } from '../types';
-var communityAdmin = new Hono<{Bindings: Bindings, Variables: Variables}>();
+import { community, communityMember, post, groupMessage, comment, communityMessage, communityMessageComment, notification, communityEvent, communityDailyVerse, user } from '../db/schema';
+import { eq, desc, and } from 'drizzle-orm';
+
+const communityAdmin = new Hono<{Bindings: Bindings, Variables: Variables}>();
+
 communityAdmin.get("/", async (c) => {
-  const prisma = getPrisma(c.env.DB);
-  const communities2 = await prisma.community.findMany({
-    include: { _count: { select: { members: true, posts: true } } },
-    orderBy: { createdAt: "desc" }
+  const db = getDrizzle(c.env.DB);
+  const communities = await db.query.community.findMany({
+    with: {
+      communityMembers: true,
+      posts: true
+    },
+    orderBy: (co, { desc }) => [desc(co.createdAt)]
   });
-  return c.json({ communities: communities2 });
+  
+  const mapped = communities.map(comm => {
+    const { communityMembers, posts, ...rest } = comm;
+    return {
+      ...rest,
+      _count: {
+        members: communityMembers.length,
+        posts: posts.length
+      }
+    };
+  });
+
+  return c.json({ communities: mapped });
 });
+
 communityAdmin.post("/", async (c) => {
-  const prisma = getPrisma(c.env.DB);
-  let name2, description, guidelines, imageUrl;
+  const db = getDrizzle(c.env.DB);
+  let name2: string = "", description: string = "", guidelines: string = "", imageUrl: string = "";
   const contentType = c.req.header("content-type") || "";
   if (contentType.includes("multipart/form-data")) {
     const formData = await c.req.formData();
-    name2 = formData.get("name");
-    description = formData.get("description");
-    guidelines = formData.get("guidelines");
+    name2 = formData.get("name") as string;
+    description = formData.get("description") as string;
+    guidelines = formData.get("guidelines") as string;
     const file = formData.get("image") as unknown as File;
     if (file && file.size > 0) {
       const fileKey = `communities/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, "_")}`;
@@ -42,288 +58,374 @@ communityAdmin.post("/", async (c) => {
     guidelines = body.guidelines;
     imageUrl = body.image;
   }
+  
   if (!imageUrl) {
     imageUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(name2 || "Community")}&background=6366f1&color=fff&size=200`;
   }
-  const adminUser = await prisma.user.findFirst({ where: { isAdmin: true } });
-  const fallbackUser = await prisma.user.findFirst();
+  
+  const adminUser = await db.query.user.findFirst({ where: eq(user.isAdmin, true) });
+  const fallbackUser = await db.query.user.findFirst();
   const creatorId = adminUser?.id || fallbackUser?.id || "00000000-0000-0000-0000-000000000000";
-  const community = await prisma.community.create({
-    data: {
-      name: name2 || "Untitled Community",
-      description: description || "",
-      guidelines: guidelines || "",
-      image: imageUrl,
-      creatorId
-    }
-  });
-  return c.json({ community });
+  
+  const [newCommunity] = await db.insert(community).values({
+    id: crypto.randomUUID(),
+    name: name2 || "Untitled Community",
+    description: description || "",
+    guidelines: guidelines || "",
+    image: imageUrl,
+    creatorId,
+  }).returning();
+  
+  return c.json({ community: newCommunity });
 });
+
 communityAdmin.delete("/:id", async (c) => {
-  const prisma = getPrisma(c.env.DB);
-  await prisma.community.delete({ where: { id: c.req.param("id") } });
+  const db = getDrizzle(c.env.DB);
+  await db.delete(community).where(eq(community.id, c.req.param("id")));
   return c.json({ success: true });
 });
+
 communityAdmin.get("/:id", async (c) => {
-  const prisma = getPrisma(c.env.DB);
-  const community = await prisma.community.findUnique({
-    where: { id: c.req.param("id") },
-    include: { _count: { select: { members: true, posts: true } } }
+  const db = getDrizzle(c.env.DB);
+  const comm = await db.query.community.findFirst({
+    where: eq(community.id, c.req.param("id")),
+    with: {
+      communityMembers: true,
+      posts: true
+    }
   });
-  if (!community) return c.json({ error: "Not found" }, 404);
-  return c.json({ community });
+  if (!comm) return c.json({ error: "Not found" }, 404);
+  
+  const { communityMembers, posts, ...rest } = comm;
+  const mapped = {
+    ...rest,
+    _count: {
+      members: communityMembers.length,
+      posts: posts.length
+    }
+  };
+  return c.json({ community: mapped });
 });
 
 communityAdmin.get("/:id/members", async (c) => {
-  const prisma = getPrisma(c.env.DB);
-  const members = await prisma.communityMember.findMany({
-    where: { communityId: c.req.param("id") },
-    include: {
-      user: { select: { id: true, firstName: true, lastName: true, username: true, email: true, avatarUrl: true } }
+  const db = getDrizzle(c.env.DB);
+  const members = await db.query.communityMember.findMany({
+    where: eq(communityMember.communityId, c.req.param("id")),
+    with: {
+      user: {
+        columns: { id: true, firstName: true, lastName: true, username: true, email: true, avatarUrl: true }
+      }
     },
-    orderBy: { joinedAt: "desc" }
+    orderBy: (cm, { desc }) => [desc(cm.joinedAt)]
   });
   return c.json({ members });
 });
+
 communityAdmin.post("/:id/admins", async (c) => {
-  const prisma = getPrisma(c.env.DB);
+  const db = getDrizzle(c.env.DB);
   const communityId = c.req.param("id");
   const { userId } = await c.req.json();
   if (!userId) return c.json({ error: "userId is required" }, 400);
-  let member = await prisma.communityMember.findFirst({
-    where: { communityId, userId }
+  
+  let member = await db.query.communityMember.findFirst({
+    where: and(eq(communityMember.communityId, communityId), eq(communityMember.userId, userId))
   });
+  
   if (!member) {
-    member = await prisma.communityMember.create({
-      data: {
-        communityId,
-        userId,
-        role: "ADMIN"
-      },
-      include: {
-        user: { select: { id: true, firstName: true, lastName: true, username: true, email: true, avatarUrl: true } }
-      }
-    });
+    const [newMember] = await db.insert(communityMember).values({
+      id: crypto.randomUUID(),
+      communityId,
+      userId,
+      role: "ADMIN",
+    }).returning();
+    member = newMember;
   } else {
-    member = await prisma.communityMember.update({
-      where: { id: member.id },
-      data: { role: "ADMIN" },
-      include: {
-        user: { select: { id: true, firstName: true, lastName: true, username: true, email: true, avatarUrl: true } }
-      }
-    });
+    const [updatedMember] = await db.update(communityMember)
+      .set({ role: "ADMIN" })
+      .where(eq(communityMember.id, member.id))
+      .returning();
+    member = updatedMember;
   }
-  return c.json({ success: true, member });
+  
+  const memberWithUser = await db.query.communityMember.findFirst({
+    where: eq(communityMember.id, member.id),
+    with: {
+      user: { columns: { id: true, firstName: true, lastName: true, username: true, email: true, avatarUrl: true } }
+    }
+  });
+  
+  return c.json({ success: true, member: memberWithUser });
 });
+
 communityAdmin.put("/:id/members/:userId/moderate", async (c) => {
-  const prisma = getPrisma(c.env.DB);
+  const db = getDrizzle(c.env.DB);
   const communityId = c.req.param("id");
   const userId = c.req.param("userId");
   const body = await c.req.json() as any;
   const { isSuspended, canPostForum, role } = body;
-  let member = await prisma.communityMember.findFirst({
-    where: { communityId, userId }
+  
+  let member = await db.query.communityMember.findFirst({
+    where: and(eq(communityMember.communityId, communityId), eq(communityMember.userId, userId))
   });
   if (!member) return c.json({ error: "Member not found" }, 404);
+  
   const dataToUpdate: any = {};
   if (isSuspended !== void 0) dataToUpdate.isSuspended = isSuspended;
   if (canPostForum !== void 0) dataToUpdate.canPostForum = canPostForum;
   if (role !== void 0) dataToUpdate.role = role;
-  member = await prisma.communityMember.update({
-    where: { id: member.id },
-    data: dataToUpdate,
-    include: {
-      user: { select: { id: true, firstName: true, lastName: true, username: true, email: true, avatarUrl: true } }
+  
+  await db.update(communityMember)
+    .set(dataToUpdate)
+    .where(eq(communityMember.id, member.id));
+    
+  const updatedMember = await db.query.communityMember.findFirst({
+    where: eq(communityMember.id, member.id),
+    with: {
+      user: { columns: { id: true, firstName: true, lastName: true, username: true, email: true, avatarUrl: true } }
     }
   });
-  return c.json({ success: true, member });
+  
+  return c.json({ success: true, member: updatedMember });
 });
+
 communityAdmin.delete("/:id/members/:userId", async (c) => {
-  const prisma = getPrisma(c.env.DB);
+  const db = getDrizzle(c.env.DB);
   const communityId = c.req.param("id");
   const userId = c.req.param("userId");
-  await prisma.communityMember.deleteMany({
-    where: { communityId, userId }
-  });
+  await db.delete(communityMember).where(and(
+    eq(communityMember.communityId, communityId),
+    eq(communityMember.userId, userId)
+  ));
   return c.json({ success: true });
 });
+
 communityAdmin.get("/:id/posts", async (c) => {
-  const prisma = getPrisma(c.env.DB);
-  const posts = await prisma.post.findMany({
-    where: { communityId: c.req.param("id") },
-    include: {
-      user: { select: { firstName: true, lastName: true, username: true, avatarUrl: true } },
-      _count: { select: { comments: true, reactions: true } }
+  const db = getDrizzle(c.env.DB);
+  const posts = await db.query.post.findMany({
+    where: eq(post.communityId, c.req.param("id")),
+    with: {
+      user: { columns: { firstName: true, lastName: true, username: true, avatarUrl: true } },
+      comments: true,
+      postReactions: true
     },
-    orderBy: { createdAt: "desc" }
+    orderBy: (p, { desc }) => [desc(p.createdAt)]
   });
-  return c.json({ posts });
+  
+  const mapped = posts.map(p => {
+    const { comments, postReactions, ...rest } = p;
+    return {
+      ...rest,
+      _count: { comments: comments.length, reactions: postReactions.length }
+    };
+  });
+  
+  return c.json({ posts: mapped });
 });
 
 communityAdmin.get("/:id/forum", async (c) => {
-  const prisma = getPrisma(c.env.DB);
-  const forumMessages = await prisma.groupMessage.findMany({
-    where: { communityId: c.req.param("id") },
-    include: {
-      sender: { select: { firstName: true, lastName: true, username: true, avatarUrl: true } }
+  const db = getDrizzle(c.env.DB);
+  const forumMessages = await db.query.groupMessage.findMany({
+    where: eq(groupMessage.communityId, c.req.param("id")),
+    with: {
+      user: { columns: { firstName: true, lastName: true, username: true, avatarUrl: true } }
     },
-    orderBy: { createdAt: "desc" }
+    orderBy: (m, { desc }) => [desc(m.createdAt)]
   });
-  return c.json({ forum: forumMessages });
+  
+  // Map user to sender to match the original JSON response
+  const mapped = forumMessages.map(m => {
+    const { user, ...rest } = m;
+    return { ...rest, sender: user };
+  });
+  
+  return c.json({ forum: mapped });
 });
+
 communityAdmin.delete("/posts/:id", async (c) => {
-  const prisma = getPrisma(c.env.DB);
-  await prisma.post.delete({ where: { id: c.req.param("id") } });
+  const db = getDrizzle(c.env.DB);
+  await db.delete(post).where(eq(post.id, c.req.param("id")));
   return c.json({ success: true });
 });
 
 communityAdmin.get("/posts/:id", async (c) => {
-  const prisma = getPrisma(c.env.DB);
-  const post = await prisma.post.findUnique({
-    where: { id: c.req.param("id") },
-    include: {
-      user: { select: { firstName: true, lastName: true, username: true, avatarUrl: true } },
-      _count: { select: { comments: true, reactions: true } },
+  const db = getDrizzle(c.env.DB);
+  const p = await db.query.post.findFirst({
+    where: eq(post.id, c.req.param("id")),
+    with: {
+      user: { columns: { firstName: true, lastName: true, username: true, avatarUrl: true } },
       comments: {
-        include: {
-          user: { select: { firstName: true, lastName: true, username: true, avatarUrl: true } }
+        with: {
+          user: { columns: { firstName: true, lastName: true, username: true, avatarUrl: true } }
         },
-        orderBy: { createdAt: 'desc' }
-      }
+        orderBy: (co, { desc }) => [desc(co.createdAt)]
+      },
+      postReactions: true
     }
   });
-  return c.json({ post });
+  
+  if (!p) return c.json({ post: null });
+  
+  const { postReactions, comments, ...rest } = p;
+  const mapped = {
+    ...rest,
+    comments,
+    _count: { comments: comments.length, reactions: postReactions.length }
+  };
+  return c.json({ post: mapped });
 });
 
 communityAdmin.delete("/posts/comments/:id", async (c) => {
-  const prisma = getPrisma(c.env.DB);
+  const db = getDrizzle(c.env.DB);
   const { reason } = await c.req.json();
   const commentId = c.req.param("id");
 
-  const comment = await prisma.comment.findUnique({ where: { id: commentId } });
-  if (!comment) return c.json({ error: "Not found" }, 404);
+  const existingComment = await db.query.comment.findFirst({ where: eq(comment.id, commentId) });
+  if (!existingComment) return c.json({ error: "Not found" }, 404);
 
-  await prisma.comment.delete({ where: { id: commentId } });
+  await db.delete(comment).where(eq(comment.id, commentId));
 
-  await prisma.notification.create({
-    data: {
-      userId: comment.userId,
-      title: "Comment Deleted",
-      message: `Your comment on a community post was deleted by an admin. Reason: ${reason}`,
-      type: "SYSTEM"
-    }
+  await db.insert(notification).values({
+    id: crypto.randomUUID(),
+    userId: existingComment.userId,
+    title: "Comment Deleted",
+    message: `Your comment on a community post was deleted by an admin. Reason: ${reason}`,
+    type: "SYSTEM",
   });
 
   return c.json({ success: true });
 });
 
 communityAdmin.delete("/forum/messages/:id", async (c) => {
-  const prisma = getPrisma(c.env.DB);
-  await prisma.groupMessage.delete({ where: { id: c.req.param("id") } });
+  const db = getDrizzle(c.env.DB);
+  await db.delete(groupMessage).where(eq(groupMessage.id, c.req.param("id")));
   return c.json({ success: true });
 });
+
 communityAdmin.delete("/comments/:id", async (c) => {
-  const prisma = getPrisma(c.env.DB);
-  await prisma.comment.delete({ where: { id: c.req.param("id") } });
+  const db = getDrizzle(c.env.DB);
+  await db.delete(comment).where(eq(comment.id, c.req.param("id")));
   return c.json({ success: true });
 });
+
 communityAdmin.get("/:id/messages", async (c) => {
-  const prisma = getPrisma(c.env.DB);
-  const messages = await prisma.communityMessage.findMany({
-    where: { communityId: c.req.param("id") },
-    include: {
-      sender: { select: { firstName: true, lastName: true, username: true, avatarUrl: true } }
+  const db = getDrizzle(c.env.DB);
+  const messages = await db.query.communityMessage.findMany({
+    where: eq(communityMessage.communityId, c.req.param("id")),
+    with: {
+      user: { columns: { firstName: true, lastName: true, username: true, avatarUrl: true } }
     },
-    orderBy: { createdAt: "desc" }
+    orderBy: (m, { desc }) => [desc(m.createdAt)]
   });
-  return c.json({ messages });
+  
+  const mapped = messages.map(m => {
+    const { user, ...rest } = m;
+    return { ...rest, sender: user };
+  });
+  
+  return c.json({ messages: mapped });
 });
+
 communityAdmin.delete("/messages/:id", async (c) => {
-  const prisma = getPrisma(c.env.DB);
-  await prisma.communityMessage.delete({ where: { id: c.req.param("id") } });
+  const db = getDrizzle(c.env.DB);
+  await db.delete(communityMessage).where(eq(communityMessage.id, c.req.param("id")));
   return c.json({ success: true });
 });
 
 communityAdmin.get("/messages/:id", async (c) => {
-  const prisma = getPrisma(c.env.DB);
-  const message = await prisma.communityMessage.findUnique({
-    where: { id: c.req.param("id") },
-    include: {
-      sender: { select: { firstName: true, lastName: true, username: true, avatarUrl: true } },
-      comments: {
-        include: {
-          user: { select: { firstName: true, lastName: true, username: true, avatarUrl: true } }
+  const db = getDrizzle(c.env.DB);
+  const m = await db.query.communityMessage.findFirst({
+    where: eq(communityMessage.id, c.req.param("id")),
+    with: {
+      user: { columns: { firstName: true, lastName: true, username: true, avatarUrl: true } },
+      communityMessageComments: {
+        with: {
+          user: { columns: { firstName: true, lastName: true, username: true, avatarUrl: true } }
         },
-        orderBy: { createdAt: 'desc' }
+        orderBy: (co, { desc }) => [desc(co.createdAt)]
       }
     }
   });
-  return c.json({ message });
+  
+  if (!m) return c.json({ message: null });
+  
+  const { user, communityMessageComments, ...rest } = m;
+  const mapped = {
+    ...rest,
+    sender: user,
+    comments: communityMessageComments
+  };
+  
+  return c.json({ message: mapped });
 });
 
 communityAdmin.delete("/messages/comments/:id", async (c) => {
-  const prisma = getPrisma(c.env.DB);
+  const db = getDrizzle(c.env.DB);
   const { reason } = await c.req.json();
   const commentId = c.req.param("id");
 
-  const comment = await prisma.communityMessageComment.findUnique({ where: { id: commentId } });
-  if (!comment) return c.json({ error: "Not found" }, 404);
+  const existingComment = await db.query.communityMessageComment.findFirst({ where: eq(communityMessageComment.id, commentId) });
+  if (!existingComment) return c.json({ error: "Not found" }, 404);
 
-  await prisma.communityMessageComment.delete({ where: { id: commentId } });
+  await db.delete(communityMessageComment).where(eq(communityMessageComment.id, commentId));
 
-  await prisma.notification.create({
-    data: {
-      userId: comment.userId,
-      title: "Comment Deleted",
-      message: `Your comment on a community message was deleted by an admin. Reason: ${reason}`,
-      type: "SYSTEM"
-    }
+  await db.insert(notification).values({
+    id: crypto.randomUUID(),
+    userId: existingComment.userId,
+    title: "Comment Deleted",
+    message: `Your comment on a community message was deleted by an admin. Reason: ${reason}`,
+    type: "SYSTEM",
   });
 
   return c.json({ success: true });
 });
+
 communityAdmin.get("/:id/events", async (c) => {
-  const prisma = getPrisma(c.env.DB);
-  const events = await prisma.communityEvent.findMany({
-    where: { communityId: c.req.param("id") },
-    orderBy: { createdAt: "desc" }
+  const db = getDrizzle(c.env.DB);
+  const events = await db.query.communityEvent.findMany({
+    where: eq(communityEvent.communityId, c.req.param("id")),
+    orderBy: (e, { desc }) => [desc(e.createdAt)]
   });
   return c.json({ events });
 });
+
 communityAdmin.delete("/events/:id", async (c) => {
-  const prisma = getPrisma(c.env.DB);
-  await prisma.communityEvent.delete({ where: { id: c.req.param("id") } });
+  const db = getDrizzle(c.env.DB);
+  await db.delete(communityEvent).where(eq(communityEvent.id, c.req.param("id")));
   return c.json({ success: true });
 });
+
 communityAdmin.post("/:id/verse-override", async (c) => {
-  const prisma = getPrisma(c.env.DB);
+  const db = getDrizzle(c.env.DB);
   const communityId = c.req.param("id");
   const { date, reference, text, explanation } = await c.req.json();
   if (!date || !reference || !text) {
     return c.json({ error: "date, reference, and text are required" }, 400);
   }
-  const verse = await prisma.communityDailyVerse.upsert({
-    where: {
-      communityId_date: {
-        communityId,
-        date
-      }
-    },
-    create: {
+  
+  const existing = await db.query.communityDailyVerse.findFirst({
+    where: and(eq(communityDailyVerse.communityId, communityId), eq(communityDailyVerse.date, date))
+  });
+  
+  let verse;
+  if (existing) {
+    const [updated] = await db.update(communityDailyVerse)
+      .set({ reference, text, explanation })
+      .where(eq(communityDailyVerse.id, existing.id))
+      .returning();
+    verse = updated;
+  } else {
+    const [inserted] = await db.insert(communityDailyVerse).values({
+      id: crypto.randomUUID(),
       communityId,
       date,
       reference,
       text,
-      explanation
-    },
-    update: {
-      reference,
-      text,
-      explanation
-    }
-  });
+      explanation,
+    }).returning();
+    verse = inserted;
+  }
+  
   return c.json({ success: true, verse });
 });
-
 
 export default communityAdmin;

@@ -1,5 +1,7 @@
 import { Hono } from 'hono';
-import { getPrisma } from '../utils/prisma';
+import { getDrizzle } from '../utils/drizzle';
+import { user as userTable, friendRequest as friendRequestTable, earnedBadge as earnedBadgeTable, communityMember as communityMemberTable } from '../db/schema';
+import { eq, or, and, inArray, sql } from 'drizzle-orm';
 import { authMiddleware } from '../middleware/auth';
 import { adminAuthMiddleware } from '../middleware/adminAuth';
 
@@ -9,13 +11,8 @@ var users = new Hono<{Bindings: Bindings, Variables: Variables}>();
 users.use("*", authMiddleware);
 users.get("/me", async (c) => {
   const userId = c.get("userId");
-  const prisma = getPrisma(c.env.DB);
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    include: {
-      currentFeeling: true
-    }
-  });
+  const db = getDrizzle(c.env.DB);
+  const user = await db.query.user.findFirst({ where: (u, { eq }) => eq(u.id, userId), with: { userFeelings: true } });
   if (!user) {
     return c.json({ error: "User not found" }, 404);
   }
@@ -25,21 +22,14 @@ users.put("/me", async (c) => {
   const userId = c.get("userId");
   const body = await c.req.json();
   const { firstName, lastName, gender, location } = body;
-  const prisma = getPrisma(c.env.DB);
-  const updated = await prisma.user.update({
-    where: { id: userId },
-    data: {
-      firstName: firstName || void 0,
-      lastName: lastName || void 0,
-      gender: gender || void 0,
-      location: location || void 0
-    }
-  });
+  const db = getDrizzle(c.env.DB);
+  const updatedArr = await db.update(userTable).set({ firstName: firstName || undefined, lastName: lastName || undefined, gender: gender || undefined, location: location || undefined }).where(eq(userTable.id, userId)).returning();
+  const updated = updatedArr[0];
   return c.json(updated);
 });
 users.put("/me/avatar", async (c) => {
   const userId = c.get("userId");
-  const prisma = getPrisma(c.env.DB);
+  const db = getDrizzle(c.env.DB);
   const formData = await c.req.formData();
   const file = formData.get("avatar") as unknown as File;
   if (!file) {
@@ -53,10 +43,8 @@ users.put("/me/avatar", async (c) => {
     });
   }
   const avatarUrl = `/api/v1/media/download/${fileKey}`;
-  const updatedUser = await prisma.user.update({
-    where: { id: userId },
-    data: { avatarUrl }
-  });
+  const updatedUserArr = await db.update(userTable).set({ avatarUrl }).where(eq(userTable.id, userId)).returning();
+  const updatedUser = updatedUserArr[0];
   return c.json({
     message: "Avatar uploaded successfully",
     avatarUrl,
@@ -67,11 +55,9 @@ users.put("/me/bio", async (c) => {
   const userId = c.get("userId");
   const body = await c.req.json();
   const { bio } = body;
-  const prisma = getPrisma(c.env.DB);
-  const updated = await prisma.user.update({
-    where: { id: userId },
-    data: { bio }
-  });
+  const db = getDrizzle(c.env.DB);
+  const updatedArr = await db.update(userTable).set({ bio }).where(eq(userTable.id, userId)).returning();
+  const updated = updatedArr[0];
   return c.json(updated);
 });
 users.put("/me/settings", async (c) => {
@@ -96,10 +82,8 @@ users.put("/me/settings", async (c) => {
     pushConnectionRequests,
     pushConnectionAccepted
   } = body;
-  const prisma = getPrisma(c.env.DB);
-  const updated = await prisma.user.update({
-    where: { id: userId },
-    data: {
+  const db = getDrizzle(c.env.DB);
+  const updatedArr = await db.update(userTable).set({
       soundAlerts: soundAlerts !== void 0 ? soundAlerts : void 0,
       hapticFeedback: hapticFeedback !== void 0 ? hapticFeedback : void 0,
       music: music !== void 0 ? music : void 0,
@@ -117,8 +101,8 @@ users.put("/me/settings", async (c) => {
       pushCommunityForum: pushCommunityForum !== void 0 ? pushCommunityForum : void 0,
       pushConnectionRequests: pushConnectionRequests !== void 0 ? pushConnectionRequests : void 0,
       pushConnectionAccepted: pushConnectionAccepted !== void 0 ? pushConnectionAccepted : void 0
-    }
-  });
+    }).where(eq(userTable.id, userId)).returning();
+  const updated = updatedArr[0];
   return c.json(updated);
 });
 users.post("/permissions", async (c) => {
@@ -126,14 +110,11 @@ users.post("/permissions", async (c) => {
 });
 users.patch("/me/fcm-token", async (c) => {
   const userId = c.get("userId");
-  const prisma = getPrisma(c.env.DB);
+  const db = getDrizzle(c.env.DB);
   try {
     const { fcmToken } = await c.req.json();
     if (!fcmToken) return c.json({ error: "fcmToken is required" }, 400);
-    const updatedUser = await prisma.user.update({
-      where: { id: userId },
-      data: { fcmToken }
-    });
+    const updatedUserArr = await db.update(userTable).set({ fcmToken }).where(eq(userTable.id, userId)).returning();
     return c.json({ success: true });
   } catch (error) {
     return c.json({ error: "Failed to update FCM token" }, 500);
@@ -144,15 +125,8 @@ users.post("/onboarding/complete", async (c) => {
 });
 users.get("/me/metrics", async (c) => {
   const userId = c.get("userId");
-  const prisma = getPrisma(c.env.DB);
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    include: {
-      quizAttempts: true,
-      dailyBreadAttempts: true,
-      earnedBadges: true
-    }
-  });
+  const db = getDrizzle(c.env.DB);
+  const user = await db.query.user.findFirst({ where: (u, { eq }) => eq(u.id, userId), with: { quizAttempts: true, dailyBreadAttempts: true, earnedBadges: true } });
   if (!user) return c.json({ error: "User not found" }, 404);
   const level = Math.floor(user.points / 100) + 1;
   return c.json({
@@ -166,10 +140,8 @@ users.get("/me/metrics", async (c) => {
 });
 users.get("/me/points", async (c) => {
   const userId = c.get("userId");
-  const prisma = getPrisma(c.env.DB);
-  const user = await prisma.user.findUnique({
-    where: { id: userId }
-  });
+  const db = getDrizzle(c.env.DB);
+  const user = await db.query.user.findFirst({ where: (u, { eq }) => eq(u.id, userId) });
   if (!user) return c.json({ error: "User not found" }, 404);
   return c.json({
     totalPoints: user.points,
@@ -182,22 +154,8 @@ users.get("/me/points", async (c) => {
 });
 users.get("/:userId", async (c) => {
   const targetUserId = c.req.param("userId");
-  const prisma = getPrisma(c.env.DB);
-  const user = await prisma.user.findUnique({
-    where: { id: targetUserId },
-    select: {
-      id: true,
-      firstName: true,
-      lastName: true,
-      username: true,
-      avatarUrl: true,
-      bio: true,
-      points: true,
-      streakCount: true,
-      createdAt: true,
-      currentFeeling: true
-    }
-  });
+  const db = getDrizzle(c.env.DB);
+  const user = await db.query.user.findFirst({ where: (u, { eq }) => eq(u.id, targetUserId), with: { userFeelings: true }, columns: { id: true, firstName: true, lastName: true, username: true, avatarUrl: true, bio: true, points: true, streakCount: true, createdAt: true } });
   if (!user) {
     return c.json({ error: "User not found" }, 404);
   }
@@ -205,13 +163,8 @@ users.get("/:userId", async (c) => {
 });
 users.get("/:userId/metrics", async (c) => {
   const targetUserId = c.req.param("userId");
-  const prisma = getPrisma(c.env.DB);
-  const user = await prisma.user.findUnique({
-    where: { id: targetUserId },
-    include: {
-      earnedBadges: true
-    }
-  });
+  const db = getDrizzle(c.env.DB);
+  const user = await db.query.user.findFirst({ where: (u, { eq }) => eq(u.id, targetUserId), with: { earnedBadges: true } });
   if (!user) return c.json({ error: "User not found" }, 404);
   const level = Math.floor(user.points / 100) + 1;
   return c.json({
@@ -224,45 +177,18 @@ users.get("/:userId/metrics", async (c) => {
 users.get("/:userId/profile-stats", async (c) => {
   const targetUserId = c.req.param("userId");
   const currentUserId = c.get("userId");
-  const prisma = getPrisma(c.env.DB);
-  const friendsCount = await prisma.friendRequest.count({
-    where: {
-      status: "ACCEPTED",
-      OR: [
-        { senderId: targetUserId },
-        { receiverId: targetUserId }
-      ]
-    }
-  });
-  const badgesCount = await prisma.earnedBadge.count({
-    where: { userId: targetUserId }
-  });
-  const communitiesCount = await prisma.communityMember.count({
-    where: { userId: targetUserId }
-  });
-  const targetUserCommunities = await prisma.communityMember.findMany({
-    where: { userId: targetUserId },
-    select: { communityId: true }
-  });
+  const db = getDrizzle(c.env.DB);
+  const friendsCountObj = await db.select({ count: sql`count(*)` }).from(friendRequestTable).where(and(eq(friendRequestTable.status, "ACCEPTED"), or(eq(friendRequestTable.senderId, targetUserId), eq(friendRequestTable.receiverId, targetUserId))));
+  const friendsCount = friendsCountObj[0].count;
+  const badgesCountObj = await db.select({ count: sql`count(*)` }).from(earnedBadgeTable).where(eq(earnedBadgeTable.userId, targetUserId));
+  const badgesCount = badgesCountObj[0].count;
+  const communitiesCountObj = await db.select({ count: sql`count(*)` }).from(communityMemberTable).where(eq(communityMemberTable.userId, targetUserId));
+  const communitiesCount = communitiesCountObj[0].count;
+  const targetUserCommunities = await db.query.communityMember.findMany({ where: (cm, { eq }) => eq(cm.userId, targetUserId), columns: { communityId: true } });
   const targetCommunityIds = targetUserCommunities.map((cm: any) => cm.communityId);
-  const mutualCommunitiesMembers = await prisma.communityMember.findMany({
-    where: {
-      userId: currentUserId,
-      communityId: { in: targetCommunityIds }
-    },
-    include: {
-      community: true
-    }
-  });
+  const mutualCommunitiesMembers = targetCommunityIds.length > 0 ? await db.query.communityMember.findMany({ where: (cm, { and, eq, inArray }) => and(eq(cm.userId, currentUserId), inArray(cm.communityId, targetCommunityIds)), with: { community: true } }) : [];
   const mutualCommunities = mutualCommunitiesMembers.map((m: any) => m.community);
-  const friendRequest = await prisma.friendRequest.findFirst({
-    where: {
-      OR: [
-        { senderId: currentUserId, receiverId: targetUserId },
-        { senderId: targetUserId, receiverId: currentUserId }
-      ]
-    }
-  });
+  const friendRequest = await db.query.friendRequest.findFirst({ where: (fr, { or, and, eq }) => or(and(eq(fr.senderId, currentUserId), eq(fr.receiverId, targetUserId)), and(eq(fr.senderId, targetUserId), eq(fr.receiverId, currentUserId))) });
   let connectionStatus = "NONE";
   if (friendRequest) {
     connectionStatus = friendRequest.status;
@@ -277,10 +203,8 @@ users.get("/:userId/profile-stats", async (c) => {
 });
 users.delete("/me", async (c) => {
   const userId = c.get("userId");
-  const prisma = getPrisma(c.env.DB);
-  await prisma.user.delete({
-    where: { id: userId }
-  });
+  const db = getDrizzle(c.env.DB);
+  await db.delete(userTable).where(eq(userTable.id, userId));
   return c.json({ message: "Account deleted successfully" });
 });
 

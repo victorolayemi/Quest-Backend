@@ -1,53 +1,56 @@
-
 import { FCMService } from '../services/fcm';
 import { dispatchNotification } from '../services/notificationService';
 
 import { Hono } from 'hono';
-import { getPrisma } from '../utils/prisma';
+import { getDrizzle } from '../utils/drizzle';
 import { authMiddleware } from '../middleware/auth';
 import { adminAuthMiddleware } from '../middleware/adminAuth';
 
-// src/routes/chats.ts
+import { directChat, directMessage, chatClear, chatPin, user } from '../db/schema';
+import { eq, or, and, desc, asc, sql, not } from 'drizzle-orm';
 import { Bindings, Variables } from '../types';
+
 var chats = new Hono<{Bindings: Bindings, Variables: Variables}>();
 chats.use("*", authMiddleware);
+
 chats.get("/", async (c) => {
   const userId = c.get("userId");
-  const prisma = getPrisma(c.env.DB);
-  const activeChats = await prisma.directChat.findMany({
-    where: {
-      OR: [
-        { user1Id: userId },
-        { user2Id: userId }
-      ]
-    },
-    include: {
-      user1: { select: { id: true, firstName: true, lastName: true, username: true, avatarUrl: true } },
-      user2: { select: { id: true, firstName: true, lastName: true, username: true, avatarUrl: true } },
-      messages: {
-        orderBy: { createdAt: "desc" },
-        take: 1
+  const db = getDrizzle(c.env.DB);
+  
+  const activeChats = await db.query.directChat.findMany({
+    where: (chat, { or, eq }) => or(eq(chat.user1Id, userId), eq(chat.user2Id, userId)),
+    with: {
+      user_user1Id: { columns: { id: true, firstName: true, lastName: true, username: true, avatarUrl: true } },
+      user_user2Id: { columns: { id: true, firstName: true, lastName: true, username: true, avatarUrl: true } },
+      directMessages: {
+        orderBy: (m, { desc }) => [desc(m.createdAt)],
+        limit: 1
       },
-      ChatClear: {
-        where: { userId }
+      chatClears: {
+        where: (cc, { eq }) => eq(cc.userId, userId)
       }
     }
   });
+
   const list = await Promise.all(activeChats.map(async (chat: any) => {
-    const friend = chat.user1Id === userId ? chat.user2 : chat.user1;
-    let lastMsg = chat.messages[0] || null;
-    if (lastMsg && chat.ChatClear.length > 0) {
-      if (lastMsg.createdAt <= chat.ChatClear[0].clearedAt) {
+    const friend = chat.user1Id === userId ? chat.user_user2Id : chat.user_user1Id;
+    let lastMsg = chat.directMessages[0] || null;
+    if (lastMsg && chat.chatClears && chat.chatClears.length > 0) {
+      if (lastMsg.createdAt <= chat.chatClears[0].clearedAt) {
         lastMsg = null;
       }
     }
-    const unreadCount = await prisma.directMessage.count({
-      where: {
-        chatId: chat.id,
-        senderId: { not: userId },
-        isRead: false
-      }
-    });
+
+    const unreadCountArr = await db.select({ count: sql<number>`count(*)` })
+      .from(directMessage)
+      .where(and(
+        eq(directMessage.chatId, chat.id),
+        not(eq(directMessage.senderId, userId)),
+        eq(directMessage.isRead, false)
+      ));
+      
+    const unreadCount = unreadCountArr[0].count;
+
     return {
       id: chat.id,
       friend,
@@ -58,205 +61,242 @@ chats.get("/", async (c) => {
   }));
   return c.json(list);
 });
+
 chats.get("/:chatId", async (c) => {
   const userId = c.get("userId");
   const chatId = c.req.param("chatId");
-  const prisma = getPrisma(c.env.DB);
-  const clearRecord = await prisma.chatClear.findUnique({
-    where: {
-      chatId_userId: { chatId, userId }
-    }
-  });
-  const list = await prisma.directMessage.findMany({
-    where: {
-      chatId,
-      ...clearRecord ? { createdAt: { gt: clearRecord.clearedAt } } : {}
+  const db = getDrizzle(c.env.DB);
+  
+  const clearRecordArr = await db.select().from(chatClear).where(and(eq(chatClear.chatId, chatId), eq(chatClear.userId, userId)));
+  const clearRecord = clearRecordArr[0];
+  
+  const list = await db.query.directMessage.findMany({
+    where: (m, { and, eq, gt }) => {
+        let conditions = [eq(m.chatId, chatId)];
+        if (clearRecord) {
+            conditions.push(gt(m.createdAt, clearRecord.clearedAt));
+        }
+        return and(...conditions);
     },
-    include: {
-      sender: { select: { id: true, username: true, avatarUrl: true } }
+    with: {
+      user: { columns: { id: true, username: true, avatarUrl: true } }
     },
-    orderBy: { createdAt: "asc" },
-    take: 100
+    orderBy: (m, { asc }) => [asc(m.createdAt)],
+    limit: 100
   });
   return c.json(list);
 });
+
 chats.post("/", async (c) => {
   const user1Id = c.get("userId");
   const body = await c.req.json();
   const { friendId } = body;
-  const prisma = getPrisma(c.env.DB);
+  const db = getDrizzle(c.env.DB);
+  
   if (user1Id === friendId) {
     return c.json({ error: "Cannot start chat with yourself" }, 400);
   }
-  let chat = await prisma.directChat.findFirst({
-    where: {
-      OR: [
-        { user1Id, user2Id: friendId },
-        { user1Id: friendId, user2Id: user1Id }
-      ]
-    },
-    include: {
-      user1: { select: { id: true, firstName: true, lastName: true, username: true, avatarUrl: true } },
-      user2: { select: { id: true, firstName: true, lastName: true, username: true, avatarUrl: true } }
+
+  let chat = await db.query.directChat.findFirst({
+    where: (c, { or, and, eq }) => or(
+      and(eq(c.user1Id, user1Id), eq(c.user2Id, friendId)),
+      and(eq(c.user1Id, friendId), eq(c.user2Id, user1Id))
+    ),
+    with: {
+      user_user1Id: { columns: { id: true, firstName: true, lastName: true, username: true, avatarUrl: true } },
+      user_user2Id: { columns: { id: true, firstName: true, lastName: true, username: true, avatarUrl: true } }
     }
   });
+
   if (!chat) {
-    chat = await prisma.directChat.create({
-      data: {
-        user1Id,
-        user2Id: friendId
-      },
-      include: {
-        user1: { select: { id: true, firstName: true, lastName: true, username: true, avatarUrl: true } },
-        user2: { select: { id: true, firstName: true, lastName: true, username: true, avatarUrl: true } }
+    const newId = crypto.randomUUID();
+    await db.insert(directChat).values({
+      id: newId,
+      user1Id,
+      user2Id: friendId
+    });
+    chat = await db.query.directChat.findFirst({
+      where: (c, { eq }) => eq(c.id, newId),
+      with: {
+        user_user1Id: { columns: { id: true, firstName: true, lastName: true, username: true, avatarUrl: true } },
+        user_user2Id: { columns: { id: true, firstName: true, lastName: true, username: true, avatarUrl: true } }
       }
     });
   }
-  const friend = chat.user1Id === user1Id ? chat.user2 : chat.user1;
+
+  if (!chat) {
+    return c.json({ error: "Chat not found" }, 404);
+  }
+
+  const friend = chat.user1Id === user1Id ? chat.user_user2Id : chat.user_user1Id;
   return c.json({
     id: chat.id,
     friend,
     createdAt: chat.createdAt
   });
 });
+
 chats.post("/:chatId/messages", async (c) => {
   const senderId = c.get("userId");
   const chatId = c.req.param("chatId");
   const body = await c.req.json();
   const { text, image } = body;
-  const prisma = getPrisma(c.env.DB);
-  const msg = await prisma.directMessage.create({
-    data: {
-      chatId,
-      senderId,
-      text: text || "",
-      image: image || null
-    },
-    include: {
-      sender: { select: { id: true, username: true, avatarUrl: true } }
+  const db = getDrizzle(c.env.DB);
+  
+  const newMsgId = crypto.randomUUID();
+  await db.insert(directMessage).values({
+    id: newMsgId,
+    chatId,
+    senderId,
+    text: text || "",
+    image: image || null
+  });
+
+  const msg = await db.query.directMessage.findFirst({
+    where: (m, { eq }) => eq(m.id, newMsgId),
+    with: {
+      user: { columns: { id: true, username: true, avatarUrl: true } }
     }
   });
-  const chat = await prisma.directChat.findUnique({
-    where: { id: chatId },
-    select: { user1Id: true, user2Id: true }
+
+  const chat = await db.query.directChat.findFirst({
+    where: (c, { eq }) => eq(c.id, chatId),
+    columns: { user1Id: true, user2Id: true }
   });
+
   if (chat) {
     const recipientId = chat.user1Id === senderId ? chat.user2Id : chat.user1Id;
-    const senderDetails = await prisma.user.findUnique({ where: { id: senderId }, select: { firstName: true, username: true } });
+    const senderDetailsArr = await db.select({ firstName: user.firstName, username: user.username }).from(user).where(eq(user.id, senderId));
+    const senderDetails = senderDetailsArr[0];
+    
     const fcm = new FCMService(c.env.FIREBASE_CLIENT_EMAIL, c.env.FIREBASE_PRIVATE_KEY);
     await dispatchNotification({
-      prisma,
+      prisma: null as any,
+      db,
       userId: recipientId,
       title: "New Message",
       message: `${senderDetails?.firstName || senderDetails?.username || "Someone"} sent you a message.`,
       type: "CHAT_MESSAGE",
       pushSettingKey: "pushDirectMessages",
       fcm,
-      data: { type: "CHAT_MESSAGE", chatId }
+      data: { type: "CHAT_MESSAGE", chatId },
+      logInDb: false
     });
   }
   return c.json(msg);
 });
+
 chats.delete("/:chatId/messages/:messageId", async (c) => {
   const userId = c.get("userId");
   const messageId = c.req.param("messageId");
-  const prisma = getPrisma(c.env.DB);
-  const msg = await prisma.directMessage.findUnique({ where: { id: messageId } });
+  const db = getDrizzle(c.env.DB);
+  
+  const msgArr = await db.select().from(directMessage).where(eq(directMessage.id, messageId));
+  const msg = msgArr[0];
   if (!msg) return c.json({ error: "Message not found" }, 404);
   if (msg.senderId !== userId) return c.json({ error: "Forbidden" }, 403);
-  await prisma.directMessage.delete({ where: { id: messageId } });
+  
+  await db.delete(directMessage).where(eq(directMessage.id, messageId));
   return c.json({ message: "Message deleted successfully" });
 });
+
 chats.delete("/:chatId/clear", async (c) => {
   const userId = c.get("userId");
   const chatId = c.req.param("chatId");
-  const prisma = getPrisma(c.env.DB);
-  const chat = await prisma.directChat.findUnique({ where: { id: chatId } });
+  const db = getDrizzle(c.env.DB);
+  
+  const chatArr = await db.select().from(directChat).where(eq(directChat.id, chatId));
+  const chat = chatArr[0];
+  
   if (!chat || chat.user1Id !== userId && chat.user2Id !== userId) {
     return c.json({ error: "Chat not found or forbidden" }, 404);
   }
-  const clearRecord = await prisma.chatClear.upsert({
-    where: {
-      chatId_userId: { chatId, userId }
-    },
-    update: {
-      clearedAt: /* @__PURE__ */ new Date()
-    },
-    create: {
-      chatId,
-      userId,
-      clearedAt: /* @__PURE__ */ new Date()
-    }
-  });
-  return c.json({ message: "Chat cleared successfully", clearRecord });
+  
+  const existingClear = await db.select().from(chatClear).where(and(eq(chatClear.chatId, chatId), eq(chatClear.userId, userId)));
+  let clearRecord;
+  if (existingClear.length > 0) {
+      clearRecord = await db.update(chatClear).set({ clearedAt: sql`(CURRENT_TIMESTAMP)` }).where(and(eq(chatClear.chatId, chatId), eq(chatClear.userId, userId))).returning();
+  } else {
+      clearRecord = await db.insert(chatClear).values({
+          id: crypto.randomUUID(),
+          chatId,
+          userId
+      }).returning();
+  }
+  
+  return c.json({ message: "Chat cleared successfully", clearRecord: clearRecord[0] });
 });
+
 chats.post("/:chatId/pin", async (c) => {
   const userId = c.get("userId");
   const chatId = c.req.param("chatId");
-  const prisma = getPrisma(c.env.DB);
-  const pin = await prisma.chatPin.create({
-    data: { chatId, userId }
-  });
-  return c.json(pin);
+  const db = getDrizzle(c.env.DB);
+  
+  const pin = await db.insert(chatPin).values({
+    id: crypto.randomUUID(),
+    chatId, 
+    userId
+  }).returning();
+  
+  return c.json(pin[0]);
 });
+
 chats.post("/:chatId/unpin", async (c) => {
   const userId = c.get("userId");
   const chatId = c.req.param("chatId");
-  const prisma = getPrisma(c.env.DB);
-  await prisma.chatPin.deleteMany({
-    where: { chatId, userId }
-  });
+  const db = getDrizzle(c.env.DB);
+  
+  await db.delete(chatPin).where(and(eq(chatPin.chatId, chatId), eq(chatPin.userId, userId)));
   return c.json({ message: "Chat unpinned successfully" });
 });
+
 chats.put("/:chatId/read", async (c) => {
   const userId = c.get("userId");
   const chatId = c.req.param("chatId");
-  const prisma = getPrisma(c.env.DB);
-  const updated = await prisma.directMessage.updateMany({
-    where: {
-      chatId,
-      senderId: { not: userId },
-      isRead: false
-    },
-    data: {
-      isRead: true
-    }
-  });
-  return c.json({ message: "Marked as read", count: updated.count });
+  const db = getDrizzle(c.env.DB);
+  
+  const updated = await db.update(directMessage).set({ isRead: true }).where(and(
+      eq(directMessage.chatId, chatId),
+      not(eq(directMessage.senderId, userId)),
+      eq(directMessage.isRead, false)
+  )).returning();
+  
+  return c.json({ message: "Marked as read", count: updated.length });
 });
+
 chats.get("/pins/list", async (c) => {
   const userId = c.get("userId");
-  const prisma = getPrisma(c.env.DB);
-  const pins = await prisma.chatPin.findMany({
-    where: { userId },
-    include: {
-      chat: {
-        include: {
-          user1: { select: { id: true, username: true, avatarUrl: true } },
-          user2: { select: { id: true, username: true, avatarUrl: true } }
+  const db = getDrizzle(c.env.DB);
+  
+  const pins = await db.query.chatPin.findMany({
+    where: (p, { eq }) => eq(p.userId, userId),
+    with: {
+      directChat: {
+        with: {
+          user_user1Id: { columns: { id: true, username: true, avatarUrl: true } },
+          user_user2Id: { columns: { id: true, username: true, avatarUrl: true } }
         }
       }
     }
   });
-  return c.json(pins.map((p: any) => p.chat));
+  
+  return c.json(pins.map((p: any) => p.directChat));
 });
+
 chats.get("/profiles/recent", async (c) => {
   const userId = c.get("userId");
-  const prisma = getPrisma(c.env.DB);
-  const list = await prisma.directChat.findMany({
-    where: {
-      OR: [
-        { user1Id: userId },
-        { user2Id: userId }
-      ]
+  const db = getDrizzle(c.env.DB);
+  
+  const list = await db.query.directChat.findMany({
+    where: (c, { or, eq }) => or(eq(c.user1Id, userId), eq(c.user2Id, userId)),
+    with: {
+      user_user1Id: { columns: { id: true, username: true, avatarUrl: true } },
+      user_user2Id: { columns: { id: true, username: true, avatarUrl: true } }
     },
-    include: {
-      user1: { select: { id: true, username: true, avatarUrl: true } },
-      user2: { select: { id: true, username: true, avatarUrl: true } }
-    },
-    take: 10
+    limit: 10
   });
-  return c.json(list.map((c2: any) => c2.user1Id === userId ? c2.user2 : c2.user1));
+  
+  return c.json(list.map((c2: any) => c2.user1Id === userId ? c2.user_user2Id : c2.user_user1Id));
 });
 
 

@@ -1,67 +1,75 @@
-import { Hono } from 'hono';
-import { getPrisma } from '../utils/prisma';
-import { authMiddleware } from '../middleware/auth';
-import { grantCoins } from '../utils/economy';
-import { adminAuthMiddleware } from '../middleware/adminAuth';
 
-// src/routes/dailyBread.ts
+import { Hono } from 'hono';
+import { getDrizzle } from '../utils/drizzle';
+import { eq, or, and, sql, desc } from 'drizzle-orm';
+import { dailyBread, dailyBreadAttempt, user, dailyVerseStat, dailyVerseLike } from '../db/schema';
+import { authMiddleware } from '../middleware/auth';
+import { grantCoinsDrizzle as grantCoins } from '../utils/economy';
+import { adminAuthMiddleware } from '../middleware/adminAuth';
 import { Bindings, Variables } from '../types';
-var dailyBread = new Hono<{Bindings: Bindings, Variables: Variables}>();
-dailyBread.use("*", authMiddleware);
-dailyBread.get("/today", async (c) => {
-  const prisma = getPrisma(c.env.DB);
-  const todayStr = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
-  let puzzle = await prisma.dailyBread.findUnique({
-    where: { date: todayStr }
+
+var dailyBreadRoute = new Hono<{Bindings: Bindings, Variables: Variables}>();
+dailyBreadRoute.use("*", authMiddleware);
+
+dailyBreadRoute.get("/today", async (c) => {
+  const db = getDrizzle(c.env.DB);
+  const todayStr = new Date().toISOString().split("T")[0];
+  
+  let puzzle = await db.query.dailyBread.findFirst({
+    where: eq(dailyBread.date, todayStr)
   });
+  
   if (!puzzle) {
-    puzzle = await prisma.dailyBread.create({
-      data: {
-        date: todayStr,
-        puzzleData: JSON.stringify({
-          letters: ["M", "O", "S", "E", "S", "A", "B", "C"],
-          hints: ["Leader of Exodus"]
-        }),
-        solution: "MOSES"
-      }
-    });
+    const puzzleId = crypto.randomUUID();
+    [puzzle] = await db.insert(dailyBread).values({
+      id: puzzleId,
+      date: todayStr,
+      puzzleData: JSON.stringify({
+        letters: ["M", "O", "S", "E", "S", "A", "B", "C"],
+        hints: ["Leader of Exodus"]
+      }),
+      solution: "MOSES"
+    }).returning();
   }
+  
   return c.json({
     id: puzzle.id,
     date: puzzle.date,
     puzzleData: JSON.parse(puzzle.puzzleData)
   });
 });
-dailyBread.post("/submit", async (c) => {
+
+dailyBreadRoute.post("/submit", async (c) => {
   const userId = c.get("userId");
-  const body = await c.req.json();
+  const body = await c.req.json() as any;
   const { puzzleId, solution } = body;
-  const prisma = getPrisma(c.env.DB);
-  const puzzle = await prisma.dailyBread.findUnique({
-    where: { id: puzzleId }
+  const db = getDrizzle(c.env.DB);
+  
+  const puzzle = await db.query.dailyBread.findFirst({
+    where: eq(dailyBread.id, puzzleId)
   });
+  
   if (!puzzle) {
     return c.json({ error: "Puzzle not found" }, 404);
   }
+  
   const isCorrect = puzzle.solution.toLowerCase() === (solution || "").trim().toLowerCase();
+  
   if (isCorrect) {
-    await prisma.dailyBreadAttempt.create({
-      data: {
-        userId,
-        dailyBreadId: puzzleId,
-        solved: true
-      }
-    });
-    await prisma.user.update({
-      where: { id: userId },
-      data: {
-        points: { increment: 20 },
-        dailyBreadPoints: { increment: 20 },
-        streakCount: { increment: 1 }
-      }
+    await db.insert(dailyBreadAttempt).values({
+      id: crypto.randomUUID(),
+      userId: userId as string,
+      dailyBreadId: puzzleId,
+      solved: true
     });
     
-    const coinRes = await grantCoins(prisma, userId, 20, "Solved Daily Bread");
+    await db.update(user).set({
+      points: sql`${user.points} + 20`,
+      dailyBreadPoints: sql`${user.dailyBreadPoints} + 20`,
+      streakCount: sql`${user.streakCount} + 1`
+    }).where(eq(user.id, userId as string));
+    
+    const coinRes = await grantCoins(db, userId as string, 20, "Solved Daily Bread");
 
     return c.json({
       correct: true,
@@ -70,39 +78,48 @@ dailyBread.post("/submit", async (c) => {
       message: "Awesome job! Puzzle solved."
     });
   }
+  
   return c.json({
     correct: false,
     message: "Incorrect answer. Try again!"
   });
 });
-dailyBread.get("/history", async (c) => {
+
+dailyBreadRoute.get("/history", async (c) => {
   const userId = c.get("userId");
-  const prisma = getPrisma(c.env.DB);
-  const history = await prisma.dailyBreadAttempt.findMany({
-    where: { userId, solved: true },
-    include: { dailyBread: true },
-    orderBy: { createdAt: "desc" }
+  const db = getDrizzle(c.env.DB);
+  
+  const history = await db.query.dailyBreadAttempt.findMany({
+    where: and(eq(dailyBreadAttempt.userId, userId as string), eq(dailyBreadAttempt.solved, true)),
+    with: { dailyBread: true },
+    orderBy: [desc(dailyBreadAttempt.createdAt)]
   });
+  
   return c.json(history);
 });
-dailyBread.get("/streak", async (c) => {
+
+dailyBreadRoute.get("/streak", async (c) => {
   const userId = c.get("userId");
-  const prisma = getPrisma(c.env.DB);
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { streakCount: true }
+  const db = getDrizzle(c.env.DB);
+  
+  const userRecord = await db.query.user.findFirst({
+    where: eq(user.id, userId as string),
+    columns: { streakCount: true }
   });
-  if (!user) return c.json({ error: "User not found" }, 404);
+  
+  if (!userRecord) return c.json({ error: "User not found" }, 404);
+  
   return c.json({
-    streak: user.streakCount
+    streak: userRecord.streakCount
   });
 });
-dailyBread.get("/verse-today", async (c) => {
+
+dailyBreadRoute.get("/verse-today", async (c) => {
   const verses = [
     {
       reference: "John 3:16",
       text: "For God so loved the world, that he gave his only Son, that whoever believes in him should not perish but have eternal life.",
-      explanation: "A reflection on God\u2019s boundless love and the gift of eternal life."
+      explanation: "A reflection on God’s boundless love and the gift of eternal life."
     },
     {
       reference: "Philippians 4:13",
@@ -127,39 +144,44 @@ dailyBread.get("/verse-today", async (c) => {
     {
       reference: "Isaiah 41:10",
       text: "Fear not, for I am with you; be not dismayed, for I am your God; I will strengthen you, I will help you, I will uphold you with my righteous right hand.",
-      explanation: "A comforting promise of God\u2019s presence and support in times of fear."
+      explanation: "A comforting promise of God’s presence and support in times of fear."
     },
     {
       reference: "Psalm 23:1",
       text: "The Lord is my shepherd; I shall not want.",
-      explanation: "A beautiful declaration of God\u2019s provision and care as our Shepherd."
+      explanation: "A beautiful declaration of God’s provision and care as our Shepherd."
     }
   ];
-  const todayStr = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+  
+  const todayStr = new Date().toISOString().split("T")[0];
   let hash = 0;
   for (let i = 0; i < todayStr.length; i++) {
     hash = todayStr.charCodeAt(i) + ((hash << 5) - hash);
   }
   const index = Math.abs(hash) % verses.length;
   const verseData = verses[index];
-  const prisma = getPrisma(c.env.DB);
+  
+  const db = getDrizzle(c.env.DB);
   const userId = c.get("userId");
-  let stat = await prisma.dailyVerseStat.findUnique({
-    where: { date: todayStr }
+  
+  let stat = await db.query.dailyVerseStat.findFirst({
+    where: eq(dailyVerseStat.date, todayStr)
   });
+  
   if (!stat) {
-    stat = await prisma.dailyVerseStat.create({
-      data: { date: todayStr }
-    });
+    [stat] = await db.insert(dailyVerseStat).values({
+      id: crypto.randomUUID(),
+      date: todayStr
+    }).returning();
   }
-  const userLike = await prisma.dailyVerseLike.findUnique({
-    where: {
-      userId_date: {
-        userId,
-        date: todayStr
-      }
-    }
+  
+  const userLike = await db.query.dailyVerseLike.findFirst({
+    where: and(
+      eq(dailyVerseLike.userId, userId as string),
+      eq(dailyVerseLike.date, todayStr)
+    )
   });
+  
   return c.json({
     ...verseData,
     likesCount: stat.likes,
@@ -168,60 +190,87 @@ dailyBread.get("/verse-today", async (c) => {
     hasLiked: !!userLike
   });
 });
-dailyBread.post("/verse-today/like", async (c) => {
+
+dailyBreadRoute.post("/verse-today/like", async (c) => {
   const userId = c.get("userId");
-  const prisma = getPrisma(c.env.DB);
-  const todayStr = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
-  const existingLike = await prisma.dailyVerseLike.findUnique({
-    where: {
-      userId_date: {
-        userId,
-        date: todayStr
-      }
-    }
+  const db = getDrizzle(c.env.DB);
+  const todayStr = new Date().toISOString().split("T")[0];
+  
+  const existingLike = await db.query.dailyVerseLike.findFirst({
+    where: and(
+      eq(dailyVerseLike.userId, userId as string),
+      eq(dailyVerseLike.date, todayStr)
+    )
   });
+  
   if (existingLike) {
-    await prisma.dailyVerseLike.delete({
-      where: { id: existingLike.id }
-    });
-    await prisma.dailyVerseStat.update({
-      where: { date: todayStr },
-      data: { likes: { decrement: 1 } }
-    });
+    await db.delete(dailyVerseLike).where(eq(dailyVerseLike.id, existingLike.id));
+    
+    await db.update(dailyVerseStat).set({
+      likes: sql`${dailyVerseStat.likes} - 1`
+    }).where(eq(dailyVerseStat.date, todayStr));
+    
     return c.json({ liked: false });
   } else {
-    await prisma.dailyVerseLike.create({
-      data: { userId, date: todayStr }
+    await db.insert(dailyVerseLike).values({
+      id: crypto.randomUUID(),
+      userId: userId as string,
+      date: todayStr
     });
-    await prisma.dailyVerseStat.upsert({
-      where: { date: todayStr },
-      create: { date: todayStr, likes: 1 },
-      update: { likes: { increment: 1 } }
+    
+    const existingStat = await db.query.dailyVerseStat.findFirst({
+      where: eq(dailyVerseStat.date, todayStr)
     });
+    
+    if (existingStat) {
+      await db.update(dailyVerseStat).set({
+        likes: sql`${dailyVerseStat.likes} + 1`
+      }).where(eq(dailyVerseStat.date, todayStr));
+    } else {
+      await db.insert(dailyVerseStat).values({
+        id: crypto.randomUUID(),
+        date: todayStr,
+        likes: 1
+      });
+    }
+    
     return c.json({ liked: true });
   }
 });
-dailyBread.post("/verse-today/share", authMiddleware, async (c) => {
+
+dailyBreadRoute.post("/verse-today/share", authMiddleware, async (c) => {
   const userId = c.get("userId");
-  const prisma = getPrisma(c.env.DB);
-  const todayStr = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
-  const stat = await prisma.dailyVerseStat.upsert({
-    where: { date: todayStr },
-    create: { date: todayStr, shares: 1 },
-    update: { shares: { increment: 1 } }
+  const db = getDrizzle(c.env.DB);
+  const todayStr = new Date().toISOString().split("T")[0];
+  
+  let finalShares = 1;
+  const existingStat = await db.query.dailyVerseStat.findFirst({
+    where: eq(dailyVerseStat.date, todayStr)
   });
   
-  await prisma.user.update({
-    where: { id: userId },
-    data: {
-      points: { increment: 10 },
-      dailyBreadPoints: { increment: 10 }
-    }
-  });
-  const coinRes = await grantCoins(prisma, userId, 10, "Shared Daily Verse");
+  if (existingStat) {
+    const [updated] = await db.update(dailyVerseStat).set({
+      shares: sql`${dailyVerseStat.shares} + 1`
+    }).where(eq(dailyVerseStat.date, todayStr)).returning();
+    finalShares = updated.shares;
+  } else {
+    const [inserted] = await db.insert(dailyVerseStat).values({
+      id: crypto.randomUUID(),
+      date: todayStr,
+      shares: 1
+    }).returning();
+    finalShares = inserted.shares;
+  }
   
-  return c.json({ sharesCount: stat.shares, coinBalance: coinRes.newBalance });
+  await db.update(user).set({
+    points: sql`${user.points} + 10`,
+    dailyBreadPoints: sql`${user.dailyBreadPoints} + 10`
+  }).where(eq(user.id, userId as string));
+  
+  const coinRes = await grantCoins(db, userId as string, 10, "Shared Daily Verse");
+  
+  return c.json({ sharesCount: finalShares, coinBalance: coinRes.newBalance });
 });
 
 
-export default dailyBread;
+export default dailyBreadRoute;

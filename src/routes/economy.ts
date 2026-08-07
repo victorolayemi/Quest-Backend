@@ -1,59 +1,57 @@
 import { Hono } from 'hono';
-import { getPrisma } from '../utils/prisma';
+import { getDrizzle } from '../utils/drizzle';
 import { authMiddleware } from '../middleware/auth';
 import { Bindings, Variables } from '../types';
+import { eq, desc, inArray, and, gte, sql } from 'drizzle-orm';
+import { user, coinTransaction, systemSetting, personalNote, journalEntry, coinPackage } from '../db/schema';
 
 const economy = new Hono<{Bindings: Bindings, Variables: Variables}>();
 economy.use("*", authMiddleware);
 
 economy.get("/balance", async (c) => {
   const userId = c.get("userId");
-  const prisma = getPrisma(c.env.DB);
+  const db = getDrizzle(c.env.DB);
   
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { coinBalance: true, verificationBadge: true }
+  const u = await db.query.user.findFirst({
+    where: (users, { eq }) => eq(users.id, userId),
+    columns: { coinBalance: true, verificationBadge: true }
   });
   
-  if (!user) return c.json({ error: "User not found" }, 404);
-  return c.json(user);
+  if (!u) return c.json({ error: "User not found" }, 404);
+  return c.json(u);
 });
 
 economy.get("/transactions", async (c) => {
   const userId = c.get("userId");
-  const prisma = getPrisma(c.env.DB);
+  const db = getDrizzle(c.env.DB);
   const page = parseInt(c.req.query("page") || "1", 10);
   const limit = parseInt(c.req.query("limit") || "20", 10);
   
-  const list = await prisma.coinTransaction.findMany({
-    where: { userId },
-    orderBy: { createdAt: "desc" },
-    skip: (page - 1) * limit,
-    take: limit
+  const list = await db.query.coinTransaction.findMany({
+    where: (txs, { eq }) => eq(txs.userId, userId),
+    orderBy: (txs, { desc }) => [desc(txs.createdAt)],
+    offset: (page - 1) * limit,
+    limit: limit
   });
   
   return c.json(list);
 });
 
 economy.get("/config", async (c) => {
-  const prisma = getPrisma(c.env.DB);
-  const settings = await prisma.systemSetting.findMany({
-    where: {
-      key: {
-        in: [
-          'cost_create_journal', 
-          'cost_create_note', 
-          'cost_post_video', 
-          'cost_post_audio', 
-          'cost_create_community',
-          'gold_badge_is_unlimited'
-        ]
-      }
-    }
+  const db = getDrizzle(c.env.DB);
+  const settings = await db.query.systemSetting.findMany({
+    where: (s, { inArray }) => inArray(s.key, [
+      'cost_create_journal', 
+      'cost_create_note', 
+      'cost_post_video', 
+      'cost_post_audio', 
+      'cost_create_community',
+      'gold_badge_is_unlimited'
+    ])
   });
 
   const config = settings.reduce((acc, curr) => {
-    acc[curr.key] = curr.value;
+    acc[curr.key] = curr.value || '';
     return acc;
   }, {} as Record<string, string>);
 
@@ -62,21 +60,23 @@ economy.get("/config", async (c) => {
 
 economy.post("/check-cost", async (c) => {
   const userId = c.get("userId");
-  const prisma = getPrisma(c.env.DB);
+  const db = getDrizzle(c.env.DB);
   const body = await c.req.json();
   const action = body.action; // 'create_journal', 'create_note', 'post_video', 'post_audio', 'create_community'
   
   if (!action) return c.json({ error: "Action is required" }, 400);
 
-  const user = await prisma.user.findUnique({ where: { id: userId } });
-  if (!user) return c.json({ error: "User not found" }, 404);
+  const u = await db.query.user.findFirst({ where: (users, { eq }) => eq(users.id, userId) });
+  if (!u) return c.json({ error: "User not found" }, 404);
 
-  const settings = await prisma.systemSetting.findMany({
-    where: {
-      key: {
-        in: ['gold_badge_is_unlimited', 'free_notes_limit', 'free_journals_limit', 'free_limit_period', `cost_${action}`]
-      }
-    }
+  const settings = await db.query.systemSetting.findMany({
+    where: (s, { inArray }) => inArray(s.key, [
+      'gold_badge_is_unlimited', 
+      'free_notes_limit', 
+      'free_journals_limit', 
+      'free_limit_period', 
+      `cost_${action}`
+    ])
   });
 
   const getSetting = (key: string, defaultValue: string) => {
@@ -86,7 +86,7 @@ economy.post("/check-cost", async (c) => {
   const isGoldUnlimited = getSetting('gold_badge_is_unlimited', 'true') === 'true';
   const baseCost = parseInt(getSetting(`cost_${action}`, '0'), 10);
 
-  if (user.verificationBadge === 'GOLD' && isGoldUnlimited) {
+  if (u.verificationBadge === 'GOLD' && isGoldUnlimited) {
     return c.json({ cost: 0, isFree: true, reason: 'Gold badge is unlimited' });
   }
 
@@ -104,10 +104,24 @@ economy.post("/check-cost", async (c) => {
       dateFilter = new Date(dateFilter.setDate(diff));
     }
     dateFilter.setHours(0,0,0,0);
+    
+    // SQLite stores dates as strings/unix, drizzle orm uses string/Date mapped correctly if set
+    // Let's use string format for safety if mapped as text, or Date if mapped as integer/text custom
+    // Assuming drizzle mapped it as text:
+    const dateString = dateFilter.toISOString();
 
-    const count = action === 'create_note' 
-      ? await prisma.personalNote.count({ where: { userId, createdAt: { gte: dateFilter } } })
-      : await prisma.journalEntry.count({ where: { userId, createdAt: { gte: dateFilter } } });
+    let countResult;
+    if (action === 'create_note') {
+      countResult = await db.select({ count: sql<number>`count(*)` })
+        .from(personalNote)
+        .where(and(eq(personalNote.userId, userId), gte(personalNote.createdAt, dateString)));
+    } else {
+      countResult = await db.select({ count: sql<number>`count(*)` })
+        .from(journalEntry)
+        .where(and(eq(journalEntry.userId, userId), gte(journalEntry.createdAt, dateString)));
+    }
+    
+    const count = countResult[0].count;
 
     if (count < limit) {
       return c.json({ cost: 0, isFree: true, reason: 'Within free limits' });
@@ -121,29 +135,27 @@ economy.post("/check-cost", async (c) => {
 economy.post("/purchase/:packageId", async (c) => {
   const userId = c.get("userId");
   const packageId = c.req.param("packageId");
-  const prisma = getPrisma(c.env.DB);
+  const db = getDrizzle(c.env.DB);
   
-  const pkg = await prisma.coinPackage.findUnique({ where: { id: packageId } });
+  const pkg = await db.query.coinPackage.findFirst({ where: (pkgs, { eq }) => eq(pkgs.id, packageId) });
   if (!pkg) return c.json({ error: "Package not found" }, 404);
+  
+  // D1 batches work seamlessly with drizzle transactions if using the d1 dialect
+  await db.transaction(async (tx) => {
+    await tx.update(user)
+      .set({ coinBalance: sql`${user.coinBalance} + ${pkg.amount}` })
+      .where(eq(user.id, userId));
+      
+    await tx.insert(coinTransaction).values({
+      id: crypto.randomUUID(), // Provide ID manually for SQLite
+      userId,
+      amount: pkg.amount,
+      type: 'EARN',
+      description: `Purchased package`
+    });
+  });
 
-  // In production, this would be a webhook from RevenueCat/Stripe validating a receipt.
-  // For now, we simulate a successful purchase.
-  await prisma.$transaction([
-    prisma.user.update({
-      where: { id: userId },
-      data: { coinBalance: { increment: pkg.coins } }
-    }),
-    prisma.coinTransaction.create({
-      data: {
-        userId,
-        amount: pkg.coins,
-        type: 'EARN',
-        description: `Purchased ${pkg.name}`
-      }
-    })
-  ]);
-
-  return c.json({ message: "Purchase successful", coinsAdded: pkg.coins });
+  return c.json({ message: "Purchase successful", coinsAdded: pkg.amount });
 });
 
 export default economy;

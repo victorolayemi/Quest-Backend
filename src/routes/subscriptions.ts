@@ -1,101 +1,118 @@
-import { Hono } from 'hono';
-import { getPrisma } from '../utils/prisma';
-import { authMiddleware } from '../middleware/auth';
-import { adminAuthMiddleware } from '../middleware/adminAuth';
+import { Hono } from "hono";
+import { getDrizzle } from "../utils/drizzle";
+import { authMiddleware } from "../middleware/auth";
+import { Bindings, Variables } from "../types";
+import { subscription } from "../db/schema";
+import { eq, and, gt, sql } from "drizzle-orm";
 
-// src/routes/subscriptions.ts
-import { Bindings, Variables } from '../types';
-var subscriptions = new Hono<{Bindings: Bindings, Variables: Variables}>();
+var subscriptions = new Hono<{ Bindings: Bindings; Variables: Variables }>();
+
 subscriptions.post("/verify", authMiddleware, async (c) => {
   const userId = c.get("userId");
   if (!userId) return c.json({ error: "Unauthorized" }, 401);
-  const body = await c.req.json();
+
+  const body = (await c.req.json()) as any;
   const { platform, productId, receiptData, originalTxId } = body;
   if (!platform || !productId || !receiptData || !originalTxId) {
     return c.json({ error: "Missing required fields" }, 400);
   }
-  const prisma = getPrisma(c.env.DB);
-  const expiresAt = /* @__PURE__ */ new Date();
+
+  const db = getDrizzle(c.env.DB);
+  const expiresAt = new Date();
   expiresAt.setMonth(expiresAt.getMonth() + 1);
+  const expiresAtStr = expiresAt.toISOString();
+
   try {
-    const subscription = await prisma.subscription.upsert({
-      where: { originalTxId },
-      update: {
-        status: "active",
-        expiresAt,
-        updatedAt: /* @__PURE__ */ new Date()
-      },
-      create: {
+    const [sub] = await db
+      .insert(subscription)
+      .values({
+        id: crypto.randomUUID(),
         userId,
         platform,
         status: "active",
         productId,
         originalTxId,
-        expiresAt,
-        isAutoRenewing: true
-      }
-    });
-    return c.json({ message: "Subscription verified", subscription });
+        expiresAt: expiresAtStr,
+        isAutoRenewing: true,
+      })
+      .onConflictDoUpdate({
+        target: subscription.originalTxId,
+        set: {
+          status: "active",
+          expiresAt: expiresAtStr,
+        },
+      })
+      .returning();
+
+    return c.json({ message: "Subscription verified", subscription: sub });
   } catch (error) {
     console.error("Subscription verify error:", error);
     return c.json({ error: "Failed to verify subscription" }, 500);
   }
 });
+
 subscriptions.get("/me", authMiddleware, async (c) => {
   const userId = c.get("userId");
   if (!userId) return c.json({ error: "Unauthorized" }, 401);
-  const prisma = getPrisma(c.env.DB);
-  const activeSubscription = await prisma.subscription.findFirst({
-    where: {
-      userId,
-      status: "active",
-      expiresAt: {
-        gt: /* @__PURE__ */ new Date()
-      }
-    },
-    orderBy: { createdAt: "desc" }
-  });
-  return c.json({ subscription: activeSubscription || null });
+
+  const db = getDrizzle(c.env.DB);
+  const now = new Date().toISOString();
+
+  const rows = await db
+    .select()
+    .from(subscription)
+    .where(
+      and(
+        eq(subscription.userId, userId),
+        eq(subscription.status, "active"),
+        gt(subscription.expiresAt, now),
+      ),
+    )
+    .orderBy(subscription.createdAt)
+    .limit(1);
+
+  return c.json({ subscription: rows[0] || null });
 });
 
 subscriptions.post("/apple-webhook", async (c) => {
-  const prisma = getPrisma(c.env.DB);
+  const db = getDrizzle(c.env.DB);
   try {
-    const body = await c.req.json();
-    
-    // In a real implementation, you MUST verify the JWS signature of body.signedPayload
-    // using Apple's public keys.
+    const body = (await c.req.json()) as any;
+
     const signedPayload = body.signedPayload;
     if (!signedPayload) return c.json({ error: "Missing signedPayload" }, 400);
 
-    // Decode JWT payload (without verifying signature just for extraction in this simplified version)
-    const payloadPart = signedPayload.split('.')[1];
-    const decodedPayload = JSON.parse(atob(payloadPart.replace(/-/g, '+').replace(/_/g, '/')));
-    
+    const payloadPart = signedPayload.split(".")[1];
+    const decodedPayload = JSON.parse(
+      atob(payloadPart.replace(/-/g, "+").replace(/_/g, "/")),
+    );
+
     const notificationType = decodedPayload.notificationType;
     const signedTransactionInfo = decodedPayload.data?.signedTransactionInfo;
-    if (!signedTransactionInfo) return c.json({ ok: true }); // No transaction info
+    if (!signedTransactionInfo) return c.json({ ok: true });
 
-    const txPart = signedTransactionInfo.split('.')[1];
-    const decodedTx = JSON.parse(atob(txPart.replace(/-/g, '+').replace(/_/g, '/')));
+    const txPart = signedTransactionInfo.split(".")[1];
+    const decodedTx = JSON.parse(
+      atob(txPart.replace(/-/g, "+").replace(/_/g, "/")),
+    );
 
     const originalTxId = decodedTx.originalTransactionId;
     const expiresDateMs = decodedTx.expiresDate;
-    
+
     let status = "active";
-    if (notificationType === "EXPIRED" || notificationType === "DID_FAIL_TO_RENEW" || notificationType === "REFUND") {
+    if (["EXPIRED", "DID_FAIL_TO_RENEW", "REFUND"].includes(notificationType)) {
       status = "expired";
     }
 
     if (originalTxId) {
-      await prisma.subscription.updateMany({
-        where: { originalTxId },
-        data: {
-          status,
-          expiresAt: expiresDateMs ? new Date(parseInt(expiresDateMs)) : undefined,
-          updatedAt: new Date()
-        }
-      });
+      const setData: any = { status };
+      if (expiresDateMs) {
+        setData.expiresAt = new Date(parseInt(expiresDateMs)).toISOString();
+      }
+      await db
+        .update(subscription)
+        .set(setData)
+        .where(eq(subscription.originalTxId, originalTxId));
     }
 
     return c.json({ ok: true });
@@ -106,48 +123,35 @@ subscriptions.post("/apple-webhook", async (c) => {
 });
 
 subscriptions.post("/google-webhook", async (c) => {
-  const prisma = getPrisma(c.env.DB);
+  const db = getDrizzle(c.env.DB);
   try {
-    const body = await c.req.json();
-    
+    const body = (await c.req.json()) as any;
+
     if (!body.message || !body.message.data) {
       return c.json({ error: "Invalid Pub/Sub message" }, 400);
     }
 
-    const dataBuffer = Buffer.from(body.message.data, 'base64');
-    const dataJson = JSON.parse(dataBuffer.toString('utf-8'));
+    const dataBuffer = Buffer.from(body.message.data, "base64");
+    const dataJson = JSON.parse(dataBuffer.toString("utf-8"));
 
-    // Google Play Developer Notification
     const subscriptionNotification = dataJson.subscriptionNotification;
     if (!subscriptionNotification) {
-      return c.json({ ok: true }); // Test message or not a sub notification
+      return c.json({ ok: true });
     }
 
     const purchaseToken = subscriptionNotification.purchaseToken;
     const notificationType = subscriptionNotification.notificationType;
-    
-    // Notification Types:
-    // 2: RENEWED
-    // 3: CANCELED (still active until expiry)
-    // 12: REVOKED (expired immediately)
-    // 13: EXPIRED (expired immediately)
-    
+
     let status = "active";
-    if (notificationType === 12 || notificationType === 13 || notificationType === 5 || notificationType === 6) {
+    if ([12, 13, 5, 6].includes(notificationType)) {
       status = "expired";
     }
 
     if (purchaseToken) {
-      // For Google, the purchaseToken is usually saved as originalTxId in our schema
-      await prisma.subscription.updateMany({
-        where: { originalTxId: purchaseToken },
-        data: {
-          status,
-          updatedAt: new Date()
-          // Note: To get the exact new expiresAt, we would need to query the Google Play Developer API
-          // using the purchaseToken. For this simplified implementation, we just update status.
-        }
-      });
+      await db
+        .update(subscription)
+        .set({ status })
+        .where(eq(subscription.originalTxId, purchaseToken));
     }
 
     return c.json({ ok: true });

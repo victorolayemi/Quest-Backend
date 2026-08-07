@@ -9,7 +9,17 @@ export class FCMService {
 
   constructor(clientEmail: string, privateKey: string) {
     this.clientEmail = clientEmail;
-    this.privateKey = privateKey.replace(/\\n/g, "\n");
+    
+    // Sanitize private key: handle escaped newlines, trim, and remove wrapping quotes
+    let formattedKey = privateKey.replace(/\\n/g, '\n').trim();
+    if (formattedKey.startsWith('"') && formattedKey.endsWith('"')) {
+      formattedKey = formattedKey.substring(1, formattedKey.length - 1).replace(/\\n/g, '\n');
+    }
+    if (formattedKey.startsWith("'") && formattedKey.endsWith("'")) {
+      formattedKey = formattedKey.substring(1, formattedKey.length - 1).replace(/\\n/g, '\n');
+    }
+    this.privateKey = formattedKey;
+
     const match2 = this.clientEmail.match(/@([^.]+)\.iam\.gserviceaccount\.com/);
     if (!match2) {
       throw new Error("Invalid FIREBASE_CLIENT_EMAIL format. Cannot extract project ID.");

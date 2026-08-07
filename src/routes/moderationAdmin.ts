@@ -1,63 +1,81 @@
 import { Hono } from 'hono';
-import { getPrisma } from '../utils/prisma';
+import { getDrizzle } from '../utils/drizzle';
 import { Bindings, Variables } from '../types';
 import { FCMService } from '../services/fcm';
 import { dispatchNotification } from '../services/notificationService';
+import {
+  report, post, groupMessage, communityMessage, directMessage, comment,
+  communityMessageComment, userMedia, community, user, postReport, chatClear,
+  appFeature
+} from '../db/schema';
+import { eq, and } from 'drizzle-orm';
 
 const moderationAdmin = new Hono<{Bindings: Bindings, Variables: Variables}>();
 
 // Get all reports (new Report table)
 moderationAdmin.get("/reports", async (c) => {
-  const prisma = getPrisma(c.env.DB);
-  const reports = await prisma.report.findMany({
-    include: {
-      user: { select: { username: true, firstName: true, lastName: true } }
+  const db = getDrizzle(c.env.DB);
+
+  const reports = await db.query.report.findMany({
+    with: {
+      user: { columns: { username: true, firstName: true, lastName: true } }
     },
-    orderBy: { createdAt: "desc" }
+    orderBy: (r, { desc }) => [desc(r.createdAt)]
   });
 
-  const enrichedReports = await Promise.all(reports.map(async (report) => {
-    let content = null;
-    let actualReportedUserId = report.reportedUserId;
+  const enrichedReports = await Promise.all(reports.map(async (rep) => {
+    let content: any = null;
+    let actualReportedUserId = rep.reportedUserId;
 
-    if (report.itemType === "POST") {
-      content = await prisma.post.findUnique({ where: { id: report.itemId } });
+    if (rep.itemType === "POST") {
+      const rows = await db.select().from(post).where(eq(post.id, rep.itemId));
+      content = rows[0] || null;
       if (content && !actualReportedUserId) actualReportedUserId = content.userId;
-    } else if (report.itemType === "COMMUNITY_ADMIN_MESSAGE") {
-      content = await prisma.groupMessage.findUnique({ where: { id: report.itemId } });
+    } else if (rep.itemType === "COMMUNITY_ADMIN_MESSAGE") {
+      const rows = await db.select().from(groupMessage).where(eq(groupMessage.id, rep.itemId));
+      content = rows[0] || null;
       if (content && !actualReportedUserId) actualReportedUserId = content.senderId;
-    } else if (report.itemType === "COMMUNITY_FORUM") {
-      content = await prisma.communityMessage.findUnique({ where: { id: report.itemId } });
+    } else if (rep.itemType === "COMMUNITY_FORUM") {
+      const rows = await db.select().from(communityMessage).where(eq(communityMessage.id, rep.itemId));
+      content = rows[0] || null;
       if (content && !actualReportedUserId) actualReportedUserId = content.senderId;
-    } else if (report.itemType === "DIRECT_MESSAGE") {
-      content = await prisma.directMessage.findUnique({ where: { id: report.itemId } });
+    } else if (rep.itemType === "DIRECT_MESSAGE") {
+      const rows = await db.select().from(directMessage).where(eq(directMessage.id, rep.itemId));
+      content = rows[0] || null;
       if (content && !actualReportedUserId) actualReportedUserId = content.senderId;
-    } else if (report.itemType === "POST_COMMENT") {
-      content = await prisma.comment.findUnique({ where: { id: report.itemId } });
+    } else if (rep.itemType === "POST_COMMENT") {
+      const rows = await db.select().from(comment).where(eq(comment.id, rep.itemId));
+      content = rows[0] || null;
       if (content && !actualReportedUserId) actualReportedUserId = content.userId;
-    } else if (report.itemType === "MESSAGE_COMMENT") {
-      content = await prisma.communityMessageComment.findUnique({ where: { id: report.itemId } });
+    } else if (rep.itemType === "MESSAGE_COMMENT") {
+      const rows = await db.select().from(communityMessageComment).where(eq(communityMessageComment.id, rep.itemId));
+      content = rows[0] || null;
       if (content && !actualReportedUserId) actualReportedUserId = content.userId;
-    } else if (report.itemType === "VIDEO" || report.itemType === "AUDIO" || report.itemType === "VIDEO_REEL" || report.itemType === "AUDIO_REEL") {
-      content = await prisma.userMedia.findUnique({ where: { id: report.itemId } });
+    } else if (["VIDEO", "AUDIO", "VIDEO_REEL", "AUDIO_REEL"].includes(rep.itemType)) {
+      const rows = await db.select().from(userMedia).where(eq(userMedia.id, rep.itemId));
+      content = rows[0] || null;
       if (content && !actualReportedUserId) actualReportedUserId = content.userId;
-    } else if (report.itemType === "COMMUNITY") {
-      content = await prisma.community.findUnique({ where: { id: report.itemId } });
+    } else if (rep.itemType === "COMMUNITY") {
+      const rows = await db.select().from(community).where(eq(community.id, rep.itemId));
+      content = rows[0] || null;
       if (content && !actualReportedUserId && content.creatorId) actualReportedUserId = content.creatorId;
     }
 
-    let reportedUser = null;
+    let reportedUser: any = null;
     if (actualReportedUserId) {
-      reportedUser = await prisma.user.findUnique({
-        where: { id: actualReportedUserId },
-        select: { id: true, username: true, firstName: true, lastName: true }
-      });
+      const rows = await db.select({
+        id: user.id,
+        username: user.username,
+        firstName: user.firstName,
+        lastName: user.lastName
+      }).from(user).where(eq(user.id, actualReportedUserId));
+      reportedUser = rows[0] || null;
     }
 
     return {
-      ...report,
+      ...rep,
       reportedUserId: actualReportedUserId,
-      reporter: report.user,
+      reporter: rep.user,
       reportedUser,
       content
     };
@@ -68,97 +86,91 @@ moderationAdmin.get("/reports", async (c) => {
 
 // Get pending reports count
 moderationAdmin.get("/reports/pending-count", async (c) => {
-  const prisma = getPrisma(c.env.DB);
-  const count = await prisma.report.count({
-    where: { status: "PENDING" }
-  });
-  return c.json({ count });
+  const db = getDrizzle(c.env.DB);
+  const rows = await db.select().from(report).where(eq(report.status, "PENDING"));
+  return c.json({ count: rows.length });
 });
 
 // Update report status
 moderationAdmin.put("/reports/:id/status", async (c) => {
-  const prisma = getPrisma(c.env.DB);
-  const { status } = await c.req.json();
-  const report = await prisma.report.update({
-    where: { id: c.req.param("id") },
-    data: { status }
-  });
-  return c.json({ success: true, report });
+  const db = getDrizzle(c.env.DB);
+  const { status } = await c.req.json() as any;
+  const [updatedReport] = await db.update(report)
+    .set({ status })
+    .where(eq(report.id, c.req.param("id")))
+    .returning();
+  return c.json({ success: true, report: updatedReport });
 });
 
 // Execute action on report
 moderationAdmin.post("/reports/:id/action", async (c) => {
-  const prisma = getPrisma(c.env.DB);
-  const { action, mediaRestrictionDays = 7 } = await c.req.json();
-  const report = await prisma.report.findUnique({
-    where: { id: c.req.param("id") }
-  });
+  const db = getDrizzle(c.env.DB);
+  const { action, mediaRestrictionDays = 7 } = await c.req.json() as any;
 
-  if (!report) {
+  const rows = await db.select().from(report).where(eq(report.id, c.req.param("id")));
+  const rep = rows[0];
+
+  if (!rep) {
     return c.json({ error: "Report not found" }, 404);
   }
 
   try {
     switch (action) {
       case "DELETE_ITEM":
-        // Depending on itemType, delete the item
-        if (report.itemType === "POST") {
-          await prisma.post.delete({ where: { id: report.itemId } });
-        } else if (report.itemType === "COMMUNITY_ADMIN_MESSAGE") {
-          await prisma.groupMessage.delete({ where: { id: report.itemId } });
-        } else if (report.itemType === "COMMUNITY_FORUM") {
-          await prisma.communityMessage.delete({ where: { id: report.itemId } });
-        } else if (report.itemType === "DIRECT_MESSAGE") {
-          await prisma.directMessage.delete({ where: { id: report.itemId } });
-        } else if (report.itemType === "POST_COMMENT") {
-          await prisma.comment.delete({ where: { id: report.itemId } });
-        } else if (report.itemType === "MESSAGE_COMMENT") {
-          await prisma.communityMessageComment.delete({ where: { id: report.itemId } });
-        } else if (report.itemType === "VIDEO" || report.itemType === "AUDIO" || report.itemType === "VIDEO_REEL" || report.itemType === "AUDIO_REEL") {
-          await prisma.userMedia.delete({ where: { id: report.itemId } });
+        if (rep.itemType === "POST") {
+          await db.delete(post).where(eq(post.id, rep.itemId));
+        } else if (rep.itemType === "COMMUNITY_ADMIN_MESSAGE") {
+          await db.delete(groupMessage).where(eq(groupMessage.id, rep.itemId));
+        } else if (rep.itemType === "COMMUNITY_FORUM") {
+          await db.delete(communityMessage).where(eq(communityMessage.id, rep.itemId));
+        } else if (rep.itemType === "DIRECT_MESSAGE") {
+          await db.delete(directMessage).where(eq(directMessage.id, rep.itemId));
+        } else if (rep.itemType === "POST_COMMENT") {
+          await db.delete(comment).where(eq(comment.id, rep.itemId));
+        } else if (rep.itemType === "MESSAGE_COMMENT") {
+          await db.delete(communityMessageComment).where(eq(communityMessageComment.id, rep.itemId));
+        } else if (["VIDEO", "AUDIO", "VIDEO_REEL", "AUDIO_REEL"].includes(rep.itemType)) {
+          await db.delete(userMedia).where(eq(userMedia.id, rep.itemId));
         }
         break;
-      
+
       case "BAN_USER":
-        if (report.reportedUserId) {
-          await prisma.user.update({
-            where: { id: report.reportedUserId },
-            data: { isBanned: true }
-          });
+        if (rep.reportedUserId) {
+          await db.update(user)
+            .set({ isBanned: true })
+            .where(eq(user.id, rep.reportedUserId));
         }
         break;
 
       case "RESTRICT_USER_COMMUNITY":
-        if (report.reportedUserId) {
-          await prisma.user.update({
-            where: { id: report.reportedUserId },
-            data: { isCommunityRestricted: true }
-          });
+        if (rep.reportedUserId) {
+          await db.update(user)
+            .set({ isCommunityRestricted: true })
+            .where(eq(user.id, rep.reportedUserId));
         }
         break;
 
       case "RESTRICT_USER_MEDIA":
-        if (report.reportedUserId) {
-          // Get configurable days
-          const feature = await prisma.appFeature.findUnique({ where: { key: "media_restriction_days" } });
+        if (rep.reportedUserId) {
+          const featureRows = await db.select().from(appFeature).where(eq(appFeature.key, "media_restriction_days"));
+          const feature = featureRows[0];
           const days = feature && feature.value ? parseInt(feature.value) : mediaRestrictionDays;
-          
+
           const expiryDate = new Date();
           expiryDate.setDate(expiryDate.getDate() + days);
-          
-          await prisma.user.update({
-            where: { id: report.reportedUserId },
-            data: { mediaRestrictionExpiry: expiryDate }
-          });
+
+          await db.update(user)
+            .set({ mediaRestrictionExpiry: expiryDate.toISOString() })
+            .where(eq(user.id, rep.reportedUserId));
         }
         break;
 
       case "ISSUE_WARNING":
-        if (report.reportedUserId) {
-          const fcm = new FCMService(c.env.FCM_PROJECT_ID, c.env.FCM_CLIENT_EMAIL, c.env.FCM_PRIVATE_KEY);
+        if (rep.reportedUserId) {
+          const fcm = new FCMService(c.env.FIREBASE_CLIENT_EMAIL, c.env.FIREBASE_PRIVATE_KEY);
           await dispatchNotification({
-            prisma,
-            userId: report.reportedUserId,
+            db,
+            userId: rep.reportedUserId,
             title: "Warning: Community Guidelines Violation",
             message: "Your recent content or behavior was reported and found to violate our community guidelines. Please review our guidelines to avoid account restriction.",
             type: "SYSTEM",
@@ -177,24 +189,26 @@ moderationAdmin.post("/reports/:id/action", async (c) => {
   }
 });
 
-// Old endpoints (for backwards compatibility if needed, or remove them)
+// Legacy endpoint (backwards compatibility)
 moderationAdmin.delete("/reports/legacy/:id", async (c) => {
-  const prisma = getPrisma(c.env.DB);
-  await prisma.postReport.delete({ where: { id: c.req.param("id") } });
+  const db = getDrizzle(c.env.DB);
+  await db.delete(postReport).where(eq(postReport.id, c.req.param("id")));
   return c.json({ success: true });
 });
 
 moderationAdmin.delete("/posts/:id", async (c) => {
-  const prisma = getPrisma(c.env.DB);
-  await prisma.post.delete({ where: { id: c.req.param("id") } });
+  const db = getDrizzle(c.env.DB);
+  await db.delete(post).where(eq(post.id, c.req.param("id")));
   return c.json({ success: true });
 });
 
 moderationAdmin.get("/chat-clears", async (c) => {
-  const prisma = getPrisma(c.env.DB);
-  const clears = await prisma.chatClear.findMany({
-    include: { user: { select: { username: true } } },
-    orderBy: { clearedAt: "desc" }
+  const db = getDrizzle(c.env.DB);
+  const clears = await db.query.chatClear.findMany({
+    with: {
+      user: { columns: { username: true } }
+    },
+    orderBy: (cc, { desc }) => [desc(cc.clearedAt)]
   });
   return c.json({ clears });
 });

@@ -1,5 +1,7 @@
 import { Hono } from "hono";
-import { getPrisma } from "../utils/prisma";
+import { getDrizzle } from "../utils/drizzle";
+import { eq, desc, inArray, and, lt, ilike, sql } from "drizzle-orm";
+import { sermonMedia, mediaLike, playProgress, userMedia, subscription, appFeature, globalSettings, user as userTable } from "../db/schema";
 import { authMiddleware, checkMediaRestriction } from "../middleware/auth";
 import { adminAuthMiddleware } from "../middleware/adminAuth";
 import admin from "firebase-admin";
@@ -29,172 +31,7 @@ media.use("/videos/*", authMiddleware);
 media.use("/audio", authMiddleware);
 media.use("/audio/*", authMiddleware);
 media.use("/upload", authMiddleware);
-async function seedMediaIfEmpty(prisma: any) {
-  const count = await prisma.sermonMedia.count();
-  if (count === 0) {
-    await prisma.sermonMedia.createMany({
-      data: [
-        // --- VIDEOS (HLS streams via Cloudflare Stream / public test streams) ---
-        {
-          title: "Walking in Faith Every Day",
-          author: "Pastor Emmanuel",
 
-          // Public HLS test stream – works immediately for dev testing
-          mediaUrl: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
-          imageUrl:
-            "https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=600",
-          type: "VIDEO",
-          duration: "12:45",
-          category: "faith",
-        },
-        {
-          title: "The Power of Prayer",
-          author: "Rev. Sarah Johnson",
-
-          mediaUrl: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
-          imageUrl:
-            "https://images.unsplash.com/photo-1518099074172-2e47ee6cfdc0?w=600",
-          type: "VIDEO",
-          duration: "9:20",
-          category: "prayer",
-        },
-        {
-          title: "Grace Abounding \u2014 Sunday Sermon",
-          author: "Bishop Adeyemi",
-
-          mediaUrl: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
-          imageUrl:
-            "https://images.unsplash.com/photo-1504052434569-70ad5836ab65?w=600",
-          type: "VIDEO",
-          duration: "28:10",
-          category: "grace",
-        },
-        {
-          title: "Leadership Lessons from David",
-          author: "Pastor Chukwudi Obi",
-
-          mediaUrl: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
-          imageUrl:
-            "https://images.unsplash.com/photo-1511632765486-a01980e01a18?w=600",
-          type: "VIDEO",
-          duration: "18:35",
-          category: "leadership",
-        },
-        {
-          title: "Unshakeable Hope in Christ",
-          author: "Evang. Miriam Adebola",
-
-          mediaUrl: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
-          imageUrl:
-            "https://images.unsplash.com/photo-1519681393784-d120267933ba?w=600",
-          type: "VIDEO",
-          duration: "21:00",
-          category: "faith",
-        },
-        {
-          title: "Renewing Your Mind Daily",
-          author: "Dr. Blessing Nwosu",
-
-          mediaUrl: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
-          imageUrl:
-            "https://images.unsplash.com/photo-1525013066836-c6090f0ad9d8?w=600",
-          type: "VIDEO",
-          duration: "14:50",
-          category: "prayer",
-        },
-        {
-          title: "Fruit of the Spirit \u2014 Part 1",
-          author: "Pastor Tunde Bakare",
-
-          mediaUrl: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
-          imageUrl:
-            "https://images.unsplash.com/photo-1465101162946-4377e57745c3?w=600",
-          type: "VIDEO",
-          duration: "16:20",
-          category: "grace",
-        },
-        {
-          title: "Serving God with All Your Heart",
-          author: "Rev. Funke Adeyemi",
-
-          mediaUrl: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
-          imageUrl:
-            "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=600",
-          type: "VIDEO",
-          duration: "11:05",
-          category: "leadership",
-        },
-        {
-          title: "Finding Peace in the Storm",
-          author: "Bishop Oluwaseun Adeyemi",
-
-          mediaUrl: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
-          imageUrl:
-            "https://images.unsplash.com/photo-1504598318550-17eba1008a68?w=600",
-          type: "VIDEO",
-          duration: "23:40",
-          category: "prayer",
-        },
-        {
-          title: "The Armor of God \u2014 Full Study",
-          author: "Apostle Paul Enenche",
-
-          mediaUrl: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
-          imageUrl:
-            "https://images.unsplash.com/photo-1506748686214-e9df14d4d9d0?w=600",
-          type: "VIDEO",
-          duration: "35:15",
-          category: "faith",
-        },
-        {
-          title: "Overflow \u2014 Youth Conference 2025",
-          author: "Minister Damilola Oyelaran",
-
-          mediaUrl: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
-          imageUrl:
-            "https://images.unsplash.com/photo-1560439513-74b037a25d84?w=600",
-          type: "VIDEO",
-          duration: "42:00",
-          category: "grace",
-        },
-        {
-          title: "Worship & Word \u2014 Sunday Special",
-          author: "RCCG Lagos Province",
-
-          mediaUrl: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
-          imageUrl:
-            "https://images.unsplash.com/photo-1508739773434-c26b3d09e071?w=600",
-          type: "VIDEO",
-          duration: "55:30",
-          category: "leadership",
-        },
-        // --- AUDIO ---
-        {
-          title: "Daily Grace Podcast Ep. 1",
-          author: "Grace Ministry",
-
-          mediaUrl: "/assets/media/grace_podcast.mp3",
-          imageUrl:
-            "https://images.unsplash.com/photo-1478737270239-2f02b77fc618?w=600",
-          type: "AUDIO",
-          duration: "32:15",
-          category: "grace",
-        },
-        {
-          title: "Morning Devotion \u2014 Psalms",
-          author: "Pastor Emmanuel",
-
-          mediaUrl: "/assets/media/grace_podcast.mp3",
-          imageUrl:
-            "https://images.unsplash.com/photo-1494232410401-ad00d5433cfa?w=600",
-          type: "AUDIO",
-          duration: "18:00",
-          category: "prayer",
-        },
-      ],
-    });
-  }
-}
 media.get("/categories", async (c) => {
   return c.json([
     { id: "faith", name: "Faith" },
@@ -204,8 +41,7 @@ media.get("/categories", async (c) => {
   ]);
 });
 media.get("/videos", async (c) => {
-  const prisma = getPrisma(c.env.DB);
-  // await seedMediaIfEmpty(prisma);
+  const db = getDrizzle(c.env.DB);
   const cursor = c.req.query("cursor");
   const search = c.req.query("search");
   const limit = Math.min(parseInt(c.req.query("limit") || "10"), 50);
@@ -213,54 +49,53 @@ media.get("/videos", async (c) => {
 
   let cursorDate = null;
   if (cursor) {
-    let s = await prisma.sermonMedia.findUnique({ where: { id: cursor } });
+    let s = await db.query.sermonMedia.findFirst({ where: eq(sermonMedia.id, cursor) });
     if (s) cursorDate = s.createdAt;
     else {
-      let u = await prisma.userMedia.findUnique({ where: { id: cursor } });
+      let u = await db.query.userMedia.findFirst({ where: eq(userMedia.id, cursor) });
       if (u) cursorDate = u.createdAt;
     }
   }
 
-  const sVideos = await prisma.sermonMedia.findMany({
-    where: {
-      type: "VIDEO",
-      ...(cursorDate ? { createdAt: { lt: cursorDate } } : {}),
-      ...(search ? { title: { contains: search } } : {}),
-    },
-    orderBy: { createdAt: "desc" },
-    take: limit + 1,
-    include: {
-      _count: {
-        select: { mediaLikes: true },
-      },
-    },
+  const sConds = [eq(sermonMedia.type, "VIDEO")];
+  if (cursorDate) sConds.push(lt(sermonMedia.createdAt, cursorDate as string));
+  if (search) sConds.push(ilike(sermonMedia.title, `%${search}%`));
+
+  const sVideosData = await db.query.sermonMedia.findMany({
+    where: and(...sConds),
+    orderBy: [desc(sermonMedia.createdAt)],
+    limit: limit + 1,
   });
 
-  const uVideos = await prisma.userMedia.findMany({
-    where: {
-      type: "video",
-      ...(cursorDate ? { createdAt: { lt: cursorDate } } : {}),
-      ...(search ? { title: { contains: search } } : {}),
-    },
-    orderBy: { createdAt: "desc" },
-    take: limit + 1,
-    include: { user: true },
+  const sVideos = await Promise.all(sVideosData.map(async (v) => {
+    const [likeCount] = await db.select({ count: sql<number>`count(*)` }).from(mediaLike).where(eq(mediaLike.mediaId, v.id));
+    return { ...v, _count: Number(likeCount.count) };
+  }));
+
+  const uConds = [eq(userMedia.type, "video")];
+  if (cursorDate) uConds.push(lt(userMedia.createdAt, cursorDate));
+  if (search) uConds.push(ilike(userMedia.title, `%${search}%`));
+
+  const uVideos = await db.query.userMedia.findMany({
+    where: and(...uConds),
+    orderBy: [desc(userMedia.createdAt)],
+    limit: limit + 1,
+    with: { user: true },
   });
 
   let likedMediaIds: string[] = [];
   if (userId) {
     const allIds = [...sVideos.map((v) => v.id), ...uVideos.map((v) => v.id)];
-    const likes = await prisma.mediaLike.findMany({
-      where: { userId, mediaId: { in: allIds } },
-      select: { mediaId: true },
-    });
-    likedMediaIds = likes.map((l: any) => l.mediaId);
+    if (allIds.length > 0) {
+      const likes = await db.select({ mediaId: mediaLike.mediaId }).from(mediaLike).where(and(eq(mediaLike.userId, userId), inArray(mediaLike.mediaId, allIds)));
+      likedMediaIds = likes.map((l) => l.mediaId);
+    }
   }
 
   const sItems = sVideos.map((v) => ({
     ...v,
     hasLiked: likedMediaIds.includes(v.id),
-    likes: v._count.mediaLikes,
+    likes: v._count || 0,
     mediaLikes: undefined,
     _count: undefined,
   }));
@@ -280,7 +115,7 @@ media.get("/videos", async (c) => {
   }));
 
   const allItems = [...sItems, ...uItems].sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    (a, b) => new Date(b.createdAt as string).getTime() - new Date(a.createdAt as string).getTime()
   );
 
   const hasMore = allItems.length > limit;
@@ -295,42 +130,63 @@ media.get("/videos", async (c) => {
 });
 media.get("/videos/continue", authMiddleware, async (c) => {
   const userId = c.get("userId");
-  const prisma = getPrisma(c.env.DB);
+  const db = getDrizzle(c.env.DB);
 
-  // Workaround for Prisma WASM panic on D1 with complex relational filters + includes.
-  // Fetch recent play progress and filter for VIDEO in memory.
-  const records = await prisma.playProgress.findMany({
-    where: {
-      userId,
-      completed: false,
-    },
-    orderBy: { updatedAt: "desc" },
-    include: {
-      media: true,
-    },
-    take: 20,
+  const recentPlays = await db.query.playProgress.findMany({
+    where: and(eq(playProgress.userId, userId), eq(playProgress.completed, false)),
+    orderBy: [desc(playProgress.updatedAt)],
+    limit: 20,
   });
 
-  const record = records.find((r) => r.media && r.media.type === "VIDEO");
-  if (!record) return c.json({ item: null });
+  // We have to query the relationships manually since they might not be defined in schema relations
+  const playProgressWithMedia = [];
+  for (const r of recentPlays) {
+    const s = await db.query.sermonMedia.findFirst({ where: eq(sermonMedia.id, r.mediaId) });
+    const u = s ? null : await db.query.userMedia.findFirst({ where: eq(userMedia.id, r.mediaId) });
+    playProgressWithMedia.push({ ...r, sermonMedia: s, userMedia: u });
+  }
 
-  const [like, likesCount] = await Promise.all([
-    prisma.mediaLike.findUnique({
-      where: { userId_mediaId: { userId, mediaId: record.mediaId } },
-    }),
-    prisma.mediaLike.count({
-      where: { mediaId: record.mediaId },
-    }),
-  ]);
+  let result = null;
+  for (const r of playProgressWithMedia) {
+    let media = r.sermonMedia;
+    let uMedia = r.userMedia;
+    if (media && media.type === "VIDEO") {
+      result = { ...r, media };
+      break;
+    } else if (uMedia && uMedia.type === "video") {
+      result = { ...r, media: { ...uMedia, _count: { mediaLikes: 0 } } };
+      break;
+    }
+  }
 
-  const item = {
-    ...record.media,
-    hasLiked: !!like,
-    likes: likesCount,
-    _count: void 0,
-    progressSeconds: record.progressSeconds,
-  };
-  return c.json({ item });
+  if (result && result.media && result.media.type === "VIDEO") {
+    const like = await db.query.mediaLike.findFirst({
+      where: and(eq(mediaLike.userId, userId), eq(mediaLike.mediaId, result.media.id)),
+    });
+    const likesCountRes = await db.select({ count: sql<number>`count(*)` }).from(mediaLike).where(eq(mediaLike.mediaId, result.media.id));
+    const item = {
+      ...result.media,
+      hasLiked: !!like,
+      likes: likesCountRes[0].count,
+      _count: void 0,
+      progressSeconds: result.progressSeconds,
+    };
+    return c.json({ item });
+  } else if (result && result.media) {
+    const like = await db.query.mediaLike.findFirst({
+      where: and(eq(mediaLike.userId, userId), eq(mediaLike.mediaId, result.media.id)),
+    });
+    const item = {
+      ...result.media,
+      hasLiked: !!like,
+      likes: 0,
+      _count: void 0,
+      progressSeconds: result.progressSeconds,
+    };
+    return c.json({ item });
+  }
+
+  return c.json({ item: null });
 });
 media.get("/videos/categories", async (c) => {
   return c.json([
@@ -341,136 +197,106 @@ media.get("/videos/categories", async (c) => {
 media.get("/videos/:id", async (c) => {
   const id = c.req.param("id");
   const userId = c.get("userId");
-  const prisma = getPrisma(c.env.DB);
-  const item = await prisma.sermonMedia.findUnique({
-    where: { id, type: "VIDEO" },
-    include: {
-      _count: {
-        select: { mediaLikes: true },
-      },
-    },
+  const db = getDrizzle(c.env.DB);
+  
+  const item = await db.query.sermonMedia.findFirst({
+    where: and(eq(sermonMedia.id, id), eq(sermonMedia.type, "VIDEO"))
   });
-  if (!item) return c.json({ error: "Video not found" }, 404);
-  let hasLiked = false;
-  if (userId) {
-    const like = await prisma.mediaLike.findUnique({
-      where: { userId_mediaId: { userId, mediaId: id } },
-    });
-    hasLiked = !!like;
+
+  if (!item) {
+    return c.json({ error: "Video not found" }, 404);
   }
-  return c.json({
-    ...item,
-    hasLiked,
-    likes: item._count.mediaLikes,
-    _count: void 0,
-  });
+
+  let isLiked = false;
+  if (userId) {
+    const like = await db.query.mediaLike.findFirst({
+      where: and(eq(mediaLike.userId, userId), eq(mediaLike.mediaId, id)),
+    });
+    isLiked = !!like;
+  }
+  
+  const likesCountRes = await db.select({ count: sql<number>`count(*)` }).from(mediaLike).where(eq(mediaLike.mediaId, id));
+
+  return c.json({ ...item, isLiked, _count: { mediaLikes: likesCountRes[0].count } });
 });
 media.post("/videos/:id/like", async (c) => {
   const id = c.req.param("id");
   const userId = c.get("userId");
-  const prisma = getPrisma(c.env.DB);
-  const sermonMedia = await prisma.sermonMedia.findUnique({ where: { id } });
-  if (!sermonMedia) {
-    return c.json({
-      message: "Media not found in SermonMedia (likely a Reel)",
-      likes: 0,
-      hasLiked: false,
-    });
+  const db = getDrizzle(c.env.DB);
+  const sermonMediaRes = await db.query.sermonMedia.findFirst({ where: eq(sermonMedia.id, id) });
+  
+  if (!sermonMediaRes) {
+    return c.json({ message: "Media not found in SermonMedia (likely a Reel)" }, 404);
   }
 
-  const existingLike = await prisma.mediaLike.findFirst({
-    where: {
-      userId,
-      mediaId: id,
-    },
+  const existingLike = await db.query.mediaLike.findFirst({
+    where: and(eq(mediaLike.userId, userId), eq(mediaLike.mediaId, id)),
   });
-  let updated;
+
   if (existingLike) {
-    await prisma.mediaLike.delete({
-      where: { id: existingLike.id },
-    });
-    updated = await prisma.sermonMedia.findUnique({
-      where: { id },
-      include: { _count: { select: { mediaLikes: true } } },
-    });
+    await db.delete(mediaLike).where(eq(mediaLike.id, existingLike.id));
+    const likesCountRes = await db.select({ count: sql<number>`count(*)` }).from(mediaLike).where(eq(mediaLike.mediaId, id));
+    return c.json({ message: "Unliked", likes: likesCountRes[0].count, hasLiked: false });
   } else {
-    await prisma.mediaLike.create({
-      data: {
-        userId,
-        mediaId: id,
-      },
-    });
-    updated = await prisma.sermonMedia.findUnique({
-      where: { id },
-      include: { _count: { select: { mediaLikes: true } } },
-    });
+    await db.insert(mediaLike).values({ id: crypto.randomUUID(), userId, mediaId: id });
+
+    // Grant 10 coins for engaging
+    const _db = getDrizzle(c.env.DB);
+    const coinRes = await grantCoins(_db, userId, 10, "Like Video");
+    
+    const likesCountRes = await db.select({ count: sql<number>`count(*)` }).from(mediaLike).where(eq(mediaLike.mediaId, id));
+
+    return c.json({ message: "Liked", likes: likesCountRes[0].count, hasLiked: true, coinBalance: coinRes?.newBalance });
   }
-  return c.json({
-    message: "Toggled like",
-    likes: updated?._count?.mediaLikes || 0,
-    hasLiked: !existingLike,
-  });
 });
-media.post("/videos/:id/playback", authMiddleware, async (c) => {
+media.post("/videos/:id/play", async (c) => {
   const userId = c.get("userId");
   const mediaId = c.req.param("id");
   const body = await c.req.json();
   const { progressSeconds, completed } = body;
-  const prisma = getPrisma(c.env.DB);
+  const db = getDrizzle(c.env.DB);
 
-  const sermonMedia = await prisma.sermonMedia.findUnique({
-    where: { id: mediaId },
+  const sermonMediaRes = await db.query.sermonMedia.findFirst({
+    where: eq(sermonMedia.id, mediaId),
   });
-  if (!sermonMedia) {
-    return c.json({
-      success: true,
-      message: "Playback tracked (UserMedia ignored)",
-    });
-  }
 
-  const existing = await prisma.playProgress.findFirst({
-    where: { userId, mediaId },
+  let existing = await db.query.playProgress.findFirst({
+    where: and(eq(playProgress.userId, userId), eq(playProgress.mediaId, mediaId)),
   });
+
   let record;
   if (existing) {
-    record = await prisma.playProgress.update({
-      where: { id: existing.id },
-      data: {
-        progressSeconds: progressSeconds ?? 0,
-        completed: completed ?? false,
-      },
-    });
+    record = await db.update(playProgress).set({
+      progressSeconds: progressSeconds ?? 0,
+      completed: completed ?? false,
+    }).where(eq(playProgress.id, existing.id)).returning();
+    record = record[0];
   } else {
-    record = await prisma.playProgress.create({
-      data: {
-        userId,
-        mediaId: mediaId as string,
-        progressSeconds: progressSeconds ?? 0,
-        completed: completed ?? false,
-      },
-    });
-  }
-  let coinRes;
-  if (completed && (!existing || !existing.completed)) {
-    await prisma.user.update({
-      where: { id: userId },
-      data: {
-        points: { increment: 20 },
-        videoReelPoints: { increment: 20 },
-      },
-    });
-    coinRes = await grantCoins(
-      prisma,
+    record = await db.insert(playProgress).values({
+      id: crypto.randomUUID(),
       userId,
-      20,
-      "Finished watching a video reel",
-    );
+      mediaId: mediaId as string,
+      progressSeconds: progressSeconds ?? 0,
+      completed: completed ?? false,
+    }).returning();
+    record = record[0];
   }
+
+  let coinRes;
+  if (completed && sermonMediaRes?.type === "VIDEO") {
+    // Reward points
+    await db.update(userTable).set({ 
+      points: sql`${userTable.points} + 20`,
+      videoReelPoints: sql`${userTable.videoReelPoints} + 20`
+    }).where(eq(userTable.id, userId));
+
+    coinRes = await grantCoins(db, userId, 20, "Complete Video");
+  }
+
   return c.json({ ...record, coinBalance: coinRes?.newBalance });
 });
 media.get("/audio", async (c) => {
-  const prisma = getPrisma(c.env.DB);
-  // await seedMediaIfEmpty(prisma);
+  const db = getDrizzle(c.env.DB);
   const cursor = c.req.query("cursor");
   const search = c.req.query("search");
   const limit = Math.min(parseInt(c.req.query("limit") || "10"), 50);
@@ -478,54 +304,53 @@ media.get("/audio", async (c) => {
 
   let cursorDate = null;
   if (cursor) {
-    let s = await prisma.sermonMedia.findUnique({ where: { id: cursor } });
+    let s = await db.query.sermonMedia.findFirst({ where: eq(sermonMedia.id, cursor as string) });
     if (s) cursorDate = s.createdAt;
     else {
-      let u = await prisma.userMedia.findUnique({ where: { id: cursor } });
+      let u = await db.query.userMedia.findFirst({ where: eq(userMedia.id, cursor as string) });
       if (u) cursorDate = u.createdAt;
     }
   }
 
-  const sAudios = await prisma.sermonMedia.findMany({
-    where: {
-      type: "AUDIO",
-      ...(cursorDate ? { createdAt: { lt: cursorDate } } : {}),
-      ...(search ? { title: { contains: search } } : {}),
-    },
-    orderBy: { createdAt: "desc" },
-    take: limit + 1,
-    include: {
-      _count: {
-        select: { mediaLikes: true },
-      },
-    },
+  const sConds = [eq(sermonMedia.type, "AUDIO")];
+  if (cursorDate) sConds.push(lt(sermonMedia.createdAt, cursorDate as string));
+  if (search) sConds.push(ilike(sermonMedia.title, `%${search}%`));
+
+  const sAudiosData = await db.query.sermonMedia.findMany({
+    where: and(...sConds),
+    orderBy: [desc(sermonMedia.createdAt)],
+    limit: limit + 1,
   });
 
-  const uAudios = await prisma.userMedia.findMany({
-    where: {
-      type: "audio",
-      ...(cursorDate ? { createdAt: { lt: cursorDate } } : {}),
-      ...(search ? { title: { contains: search } } : {}),
-    },
-    orderBy: { createdAt: "desc" },
-    take: limit + 1,
-    include: { user: true },
+  const sAudios = await Promise.all(sAudiosData.map(async (a) => {
+    const [likeCount] = await db.select({ count: sql<number>`count(*)` }).from(mediaLike).where(eq(mediaLike.mediaId, a.id));
+    return { ...a, _count: Number(likeCount.count) };
+  }));
+
+  const uConds = [eq(userMedia.type, "audio")];
+  if (cursorDate) uConds.push(lt(userMedia.createdAt, cursorDate));
+  if (search) uConds.push(ilike(userMedia.title, `%${search}%`));
+
+  const uAudios = await db.query.userMedia.findMany({
+    where: and(...uConds),
+    orderBy: [desc(userMedia.createdAt)],
+    limit: limit + 1,
+    with: { user: true },
   });
 
   let likedMediaIds: string[] = [];
   if (userId) {
     const allIds = [...sAudios.map((v) => v.id), ...uAudios.map((v) => v.id)];
-    const likes = await prisma.mediaLike.findMany({
-      where: { userId, mediaId: { in: allIds } },
-      select: { mediaId: true },
-    });
-    likedMediaIds = likes.map((l: any) => l.mediaId);
+    if (allIds.length > 0) {
+      const likes = await db.select({ mediaId: mediaLike.mediaId }).from(mediaLike).where(and(eq(mediaLike.userId, userId), inArray(mediaLike.mediaId, allIds)));
+      likedMediaIds = likes.map((l) => l.mediaId);
+    }
   }
 
   const sItems = sAudios.map((a) => ({
     ...a,
     hasLiked: likedMediaIds.includes(a.id),
-    likes: a._count.mediaLikes,
+    likes: a._count || 0,
     mediaLikes: undefined,
     _count: undefined,
   }));
@@ -545,7 +370,7 @@ media.get("/audio", async (c) => {
   }));
 
   const allItems = [...sItems, ...uItems].sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    (a, b) => new Date(b.createdAt as string).getTime() - new Date(a.createdAt as string).getTime()
   );
 
   const hasMore = allItems.length > limit;
@@ -560,32 +385,62 @@ media.get("/audio", async (c) => {
 });
 media.get("/audio/continue", authMiddleware, async (c) => {
   const userId = c.get("userId");
-  const prisma = getPrisma(c.env.DB);
-  const record = await prisma.playProgress.findFirst({
-    where: {
-      userId,
-      completed: false,
-      media: { type: "AUDIO" },
-    },
-    orderBy: { updatedAt: "desc" },
-    include: {
-      media: {
-        include: { _count: { select: { mediaLikes: true } } },
-      },
-    },
+  const db = getDrizzle(c.env.DB);
+
+  const recentPlays = await db.query.playProgress.findMany({
+    where: and(eq(playProgress.userId, userId), eq(playProgress.completed, false)),
+    orderBy: [desc(playProgress.updatedAt)],
+    limit: 20,
   });
-  if (!record) return c.json({ item: null });
-  const like = await prisma.mediaLike.findUnique({
-    where: { userId_mediaId: { userId, mediaId: record.mediaId } },
-  });
-  const item = {
-    ...record.media,
-    hasLiked: !!like,
-    likes: record.media._count.mediaLikes,
-    _count: void 0,
-    progressSeconds: record.progressSeconds,
-  };
-  return c.json({ item });
+
+  const playProgressWithMedia = [];
+  for (const r of recentPlays) {
+    const s = await db.query.sermonMedia.findFirst({ where: eq(sermonMedia.id, r.mediaId) });
+    const u = s ? null : await db.query.userMedia.findFirst({ where: eq(userMedia.id, r.mediaId) });
+    playProgressWithMedia.push({ ...r, sermonMedia: s, userMedia: u });
+  }
+
+  let result = null;
+  for (const r of playProgressWithMedia) {
+    let media = r.sermonMedia;
+    let uMedia = r.userMedia;
+    if (media && media.type === "AUDIO") {
+      result = { ...r, media };
+      break;
+    } else if (uMedia && uMedia.type === "audio") {
+      result = { ...r, media: { ...uMedia, _count: { mediaLikes: 0 } } };
+      break;
+    }
+  }
+
+  if (result && result.media && result.media.type === "AUDIO") {
+    const like = await db.query.mediaLike.findFirst({
+      where: and(eq(mediaLike.userId, userId), eq(mediaLike.mediaId, result.media.id)),
+    });
+    const likesCountRes = await db.select({ count: sql<number>`count(*)` }).from(mediaLike).where(eq(mediaLike.mediaId, result.media.id));
+    const item = {
+      ...result.media,
+      hasLiked: !!like,
+      likes: likesCountRes[0].count,
+      _count: void 0,
+      progressSeconds: result.progressSeconds,
+    };
+    return c.json({ item });
+  } else if (result && result.media) {
+    const like = await db.query.mediaLike.findFirst({
+      where: and(eq(mediaLike.userId, userId), eq(mediaLike.mediaId, result.media.id)),
+    });
+    const item = {
+      ...result.media,
+      hasLiked: !!like,
+      likes: 0,
+      _count: void 0,
+      progressSeconds: result.progressSeconds,
+    };
+    return c.json({ item });
+  }
+
+  return c.json({ item: null });
 });
 media.get("/audio/categories", async (c) => {
   return c.json([
@@ -597,144 +452,135 @@ media.get("/audio/categories", async (c) => {
 media.get("/audio/:id", async (c) => {
   const id = c.req.param("id");
   const userId = c.get("userId");
-  const prisma = getPrisma(c.env.DB);
-  const item = await prisma.sermonMedia.findUnique({
-    where: { id, type: "AUDIO" },
-    include: {
-      _count: {
-        select: { mediaLikes: true },
-      },
-    },
+  const db = getDrizzle(c.env.DB);
+  
+  const item = await db.query.sermonMedia.findFirst({
+    where: and(eq(sermonMedia.id, id), eq(sermonMedia.type, "AUDIO"))
   });
-  if (!item) return c.json({ error: "Audio not found" }, 404);
-  let hasLiked = false;
-  if (userId) {
-    const like = await prisma.mediaLike.findUnique({
-      where: { userId_mediaId: { userId, mediaId: id } },
-    });
-    hasLiked = !!like;
+
+  if (!item) {
+    return c.json({ error: "Audio not found" }, 404);
   }
-  return c.json({
-    ...item,
-    hasLiked,
-    likes: item._count.mediaLikes,
-    _count: void 0,
-  });
+
+  let isLiked = false;
+  if (userId) {
+    const like = await db.query.mediaLike.findFirst({
+      where: and(eq(mediaLike.userId, userId), eq(mediaLike.mediaId, id)),
+    });
+    isLiked = !!like;
+  }
+  
+  const likesCountRes = await db.select({ count: sql<number>`count(*)` }).from(mediaLike).where(eq(mediaLike.mediaId, id));
+
+  return c.json({ ...item, isLiked, _count: { mediaLikes: likesCountRes[0].count } });
 });
 media.post("/audio/:id/like", async (c) => {
   const id = c.req.param("id");
   const userId = c.get("userId");
-  const prisma = getPrisma(c.env.DB);
-  const sermonMedia = await prisma.sermonMedia.findUnique({ where: { id } });
-  if (!sermonMedia) {
-    return c.json({
-      message: "Media not found in SermonMedia (likely a Reel)",
-      likes: 0,
-      hasLiked: false,
-    });
+  const db = getDrizzle(c.env.DB);
+  const sermonMediaRes = await db.query.sermonMedia.findFirst({ where: eq(sermonMedia.id, id) });
+  
+  if (!sermonMediaRes) {
+    return c.json({ message: "Media not found in SermonMedia (likely a Reel)" }, 404);
   }
 
-  const existingLike = await prisma.mediaLike.findUnique({
-    where: {
-      userId_mediaId: {
-        userId,
-        mediaId: id,
-      },
-    },
+  const existingLike = await db.query.mediaLike.findFirst({
+    where: and(eq(mediaLike.userId, userId), eq(mediaLike.mediaId, id)),
   });
-  let updated;
+
   if (existingLike) {
-    await prisma.mediaLike.delete({ where: { id: existingLike.id } });
-    updated = await prisma.sermonMedia.findUnique({
-      where: { id },
-      include: { _count: { select: { mediaLikes: true } } },
-    });
+    await db.delete(mediaLike).where(eq(mediaLike.id, existingLike.id));
+    const likesCountRes = await db.select({ count: sql<number>`count(*)` }).from(mediaLike).where(eq(mediaLike.mediaId, id));
+    return c.json({ message: "Unliked", likes: likesCountRes[0].count, hasLiked: false });
   } else {
-    await prisma.mediaLike.create({ data: { userId, mediaId: id } });
-    updated = await prisma.sermonMedia.findUnique({
-      where: { id },
-      include: { _count: { select: { mediaLikes: true } } },
-    });
+    await db.insert(mediaLike).values({ id: crypto.randomUUID(), userId, mediaId: id });
+
+    // Grant 10 coins for engaging
+    const _db = getDrizzle(c.env.DB);
+    const coinRes = await grantCoins(_db, userId, 10, "Like Audio");
+    
+    const likesCountRes = await db.select({ count: sql<number>`count(*)` }).from(mediaLike).where(eq(mediaLike.mediaId, id));
+
+    return c.json({ message: "Liked", likes: likesCountRes[0].count, hasLiked: true, coinBalance: coinRes?.newBalance });
   }
-  return c.json({
-    message: "Toggled like",
-    likes: updated?._count?.mediaLikes || 0,
-    hasLiked: !existingLike,
-  });
 });
-media.post("/audio/:id/playback", authMiddleware, async (c) => {
+media.post("/audio/:id/play", async (c) => {
   const userId = c.get("userId");
   const mediaId = c.req.param("id");
   const body = await c.req.json();
   const { progressSeconds, completed } = body;
-  const prisma = getPrisma(c.env.DB);
+  const db = getDrizzle(c.env.DB);
 
-  const sermonMedia = await prisma.sermonMedia.findUnique({
-    where: { id: mediaId },
+  const sermonMediaRes = await db.query.sermonMedia.findFirst({
+    where: eq(sermonMedia.id, mediaId),
   });
-  if (!sermonMedia) {
-    return c.json({
-      success: true,
-      message: "Playback tracked (UserMedia ignored)",
-    });
-  }
 
-  const existing = await prisma.playProgress.findFirst({
-    where: { userId, mediaId },
+  let existing = await db.query.playProgress.findFirst({
+    where: and(eq(playProgress.userId, userId), eq(playProgress.mediaId, mediaId)),
   });
+
   let record;
   if (existing) {
-    record = await prisma.playProgress.update({
-      where: { id: existing.id },
-      data: { progressSeconds, completed },
-    });
+    record = await db.update(playProgress).set({
+      progressSeconds: progressSeconds ?? 0,
+      completed: completed ?? false,
+    }).where(eq(playProgress.id, existing.id)).returning();
+    record = record[0];
   } else {
-    record = await prisma.playProgress.create({
-      data: { userId, mediaId: mediaId as string, progressSeconds, completed },
-    });
-  }
-  let coinRes;
-  if (completed && (!existing || !existing.completed)) {
-    await prisma.user.update({
-      where: { id: userId },
-      data: {
-        points: { increment: 20 },
-        audioReelPoints: { increment: 20 },
-      },
-    });
-    coinRes = await grantCoins(
-      prisma,
+    record = await db.insert(playProgress).values({
+      id: crypto.randomUUID(),
       userId,
-      20,
-      "Finished listening to an audio reel",
-    );
+      mediaId: mediaId as string,
+      progressSeconds: progressSeconds ?? 0,
+      completed: completed ?? false,
+    }).returning();
+    record = record[0];
   }
+
+  let coinRes;
+  if (completed && sermonMediaRes?.type === "AUDIO") {
+    // Reward points
+    await db.update(userTable).set({ 
+      points: sql`${userTable.points} + 20`,
+      audioReelPoints: sql`${userTable.audioReelPoints} + 20`
+    }).where(eq(userTable.id, userId));
+
+    coinRes = await grantCoins(db, userId, 20, "Complete Audio");
+  }
+
   return c.json({ ...record, coinBalance: coinRes?.newBalance });
 });
 media.get("/upload/limit-check", authMiddleware, async (c) => {
   const userId = c.get("userId");
-  const prisma = getPrisma(c.env.DB);
-  const activeSubscription = await prisma.subscription.findFirst({
-    where: { userId, status: "active", expiresAt: { gt: new Date() } },
+  const db = getDrizzle(c.env.DB);
+  
+  const activeSubscription = await db.query.subscription.findFirst({
+    where: and(eq(subscription.userId, userId), eq(subscription.status, "active"), sql`${subscription.expiresAt} > CURRENT_TIMESTAMP`),
   });
+  
   if (activeSubscription) {
     return c.json({ limitReached: false, isPro: true, used: 0, limit: -1 });
   }
-  const feature = await prisma.appFeature.findUnique({
-    where: { key: "free_media_posts_limit" },
+  
+  const feature = await db.query.appFeature.findFirst({
+    where: eq(appFeature.key, "free_media_posts_limit"),
   });
+  
   let limit = 3;
   if (feature?.value) {
     const parsed = parseInt(feature.value, 10);
     if (!isNaN(parsed)) limit = parsed;
   }
-  const used = await prisma.userMedia.count({ where: { userId } });
+  
+  const usedRes = await db.select({ count: sql<number>`count(*)` }).from(userMedia).where(eq(userMedia.userId, userId));
+  const used = usedRes[0].count;
+  
   return c.json({ limitReached: used >= limit, isPro: false, used, limit });
 });
 
 media.post("/upload", async (c) => {
   const userId = c.get("userId");
-  const prisma = getPrisma(c.env.DB);
+  const db = getDrizzle(c.env.DB);
   const formData = await c.req.formData();
   const file = formData.get("file");
   const title = formData.get("title") || "Untitled";
@@ -762,84 +608,49 @@ media.post("/upload", async (c) => {
     return c.json({ error: 'No file provided in form-data key "file"' }, 400);
   }
 
-  const globalSettings =
-    (await prisma.globalSettings.findUnique({ where: { id: "default" } })) ||
-    ({
+  const globalSettingsRes = await db.query.globalSettings.findFirst({ where: eq(globalSettings.id, "default") });
+  const settings = globalSettingsRes || ({
       videoUploadSizeLimitMB: 50,
       audioUploadSizeLimitMB: 50,
       devotionVideoSizeLimitMB: 50,
       videoUploadDurationLimitSec: 300,
       audioUploadDurationLimitSec: 1800,
       devotionVideoDurationLimitSec: 300,
-    } as any);
+  } as any);
 
   const fileSizeInMB = (file as File).size / (1024 * 1024);
-  if (
-    type === "video" &&
-    fileSizeInMB > globalSettings.videoUploadSizeLimitMB
-  ) {
-    return c.json(
-      {
-        error: `Video file exceeds the limit of ${globalSettings.videoUploadSizeLimitMB}MB.`,
-      },
-      400,
-    );
+  if (type === "video" && fileSizeInMB > settings.videoUploadSizeLimitMB) {
+    return c.json({ error: `Video file exceeds the limit of ${settings.videoUploadSizeLimitMB}MB.` }, 400);
   }
-  if (
-    type === "audio" &&
-    fileSizeInMB > globalSettings.audioUploadSizeLimitMB
-  ) {
-    return c.json(
-      {
-        error: `Audio file exceeds the limit of ${globalSettings.audioUploadSizeLimitMB}MB.`,
-      },
-      400,
-    );
+  if (type === "audio" && fileSizeInMB > settings.audioUploadSizeLimitMB) {
+    return c.json({ error: `Audio file exceeds the limit of ${settings.audioUploadSizeLimitMB}MB.` }, 400);
   }
 
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { isBanned: true, mediaRestrictionExpiry: true },
+  const userRes = await db.query.user.findFirst({
+    where: eq(userTable.id, userId),
+    columns: { isBanned: true, mediaRestrictionExpiry: true },
   });
 
-  if (user?.isBanned) {
+  if (userRes?.isBanned) {
     return c.json({ error: "Your account is banned." }, 403);
   }
 
-  if (
-    user?.mediaRestrictionExpiry &&
-    new Date(user.mediaRestrictionExpiry) > new Date()
-  ) {
-    return c.json(
-      {
-        error: `Your account is restricted from posting media until ${new Date(user.mediaRestrictionExpiry).toLocaleDateString()}.`,
-      },
-      403,
-    );
+  if (userRes?.mediaRestrictionExpiry && new Date(userRes.mediaRestrictionExpiry) > new Date()) {
+    return c.json({ error: `Your account is restricted from posting media until ${new Date(userRes.mediaRestrictionExpiry).toLocaleDateString()}.` }, 403);
   }
 
   if (isReel && !isEdit) {
     const actionType = type === "video" ? "post_video" : "post_audio";
-    const economyCheck = await checkAndDeductCoins(
-      c,
-      prisma,
-      userId,
-      actionType,
-      `Posted a ${type} reel`,
-    );
+    const economyCheck = await checkAndDeductCoins(c, db, userId, actionType, `Posted a ${type} reel`);
     if (!economyCheck.success) {
-      return c.json(
-        { error: economyCheck.message || "Insufficient coins to post media" },
-        403,
-      );
+      return c.json({ error: economyCheck.message || "Insufficient coins to post media" }, 403);
     }
   }
+
   const fileKey = `uploads/${Date.now()}-${(file as File).name}`;
   const fileBuffer = await (file as File).arrayBuffer();
   if (c.env.MEDIA_BUCKET) {
-    await c.env.MEDIA_BUCKET.put(fileKey, fileBuffer, {
-      httpMetadata: { contentType: (file as File).type },
-    });
+    await c.env.MEDIA_BUCKET.put(fileKey, fileBuffer, { httpMetadata: { contentType: (file as File).type } });
   }
   const origin = new URL(c.req.url).origin;
   const fileUrl = `${origin}/api/v1/media/download/${fileKey}`;
@@ -849,29 +660,21 @@ media.post("/upload", async (c) => {
   if (thumbnail && c.env.MEDIA_BUCKET) {
     const thumbKey = `uploads/${Date.now()}-thumb-${(thumbnail as File).name}`;
     const thumbBuffer = await (thumbnail as File).arrayBuffer();
-    await c.env.MEDIA_BUCKET.put(thumbKey, thumbBuffer, {
-      httpMetadata: { contentType: (thumbnail as File).type },
-    });
+    await c.env.MEDIA_BUCKET.put(thumbKey, thumbBuffer, { httpMetadata: { contentType: (thumbnail as File).type } });
     imageUrl = `${origin}/api/v1/media/download/${thumbKey}`;
   }
 
   if (isReel && !isEdit) {
-    await prisma.userMedia.create({
-      data: {
+    await db.insert(userMedia).values({
+        id: crypto.randomUUID(),
         userId,
         title: title as string,
         mediaUrl: fileUrl,
         imageUrl,
         type: type as string,
-      },
     });
   }
-  return c.json({
-    message: "File uploaded successfully to R2",
-    fileUrl,
-    imageUrl,
-    url: fileUrl,
-  });
+  return c.json({ message: "File uploaded successfully to R2", fileUrl, imageUrl, url: fileUrl });
 });
 media.delete("/file", async (c) => {
   const body = await c.req.json();
@@ -899,50 +702,48 @@ media.delete("/file", async (c) => {
 });
 
 media.get("/user/created", authMiddleware, async (c) => {
-  const prisma = getPrisma(c.env.DB);
+  const db = getDrizzle(c.env.DB);
   const userId = c.get("userId");
-  const userMedia = await prisma.userMedia.findMany({
-    where: { userId },
-    orderBy: { createdAt: "desc" },
+  const result = await db.query.userMedia.findMany({
+    where: eq(userMedia.userId, userId),
+    orderBy: [desc(userMedia.createdAt)],
   });
-  return c.json(userMedia);
+  return c.json(result);
 });
 
 media.put("/user/:id", authMiddleware, async (c) => {
-  const prisma = getPrisma(c.env.DB);
+  const db = getDrizzle(c.env.DB);
   const userId = c.get("userId");
-  const mediaId = c.req.param("id");
+  const mediaId = c.req.param("id") as string;
 
-  const existingMedia = await prisma.userMedia.findUnique({
-    where: { id: mediaId },
+  const existingMedia = await db.query.userMedia.findFirst({
+    where: eq(userMedia.id, mediaId),
   });
+  
   if (!existingMedia) return c.json({ error: "Media not found" }, 404);
-  if (existingMedia.userId !== userId)
-    return c.json({ error: "Unauthorized" }, 403);
+  if (existingMedia.userId !== userId) return c.json({ error: "Unauthorized" }, 403);
 
   const reqData = await c.req.json();
-  const updatedMedia = await prisma.userMedia.update({
-    where: { id: mediaId },
-    data: {
+  const updatedMedia = await db.update(userMedia).set({
       title: reqData.title !== undefined ? reqData.title : existingMedia.title,
-    },
-  });
-  return c.json({ message: "Media updated successfully", media: updatedMedia });
+  }).where(eq(userMedia.id, mediaId)).returning();
+
+  return c.json({ message: "Media updated successfully", media: updatedMedia[0] });
 });
 
 media.delete("/user/:id", authMiddleware, async (c) => {
-  const prisma = getPrisma(c.env.DB);
+  const db = getDrizzle(c.env.DB);
   const userId = c.get("userId");
-  const mediaId = c.req.param("id");
+  const mediaId = c.req.param("id") as string;
 
-  const existingMedia = await prisma.userMedia.findUnique({
-    where: { id: mediaId },
+  const existingMedia = await db.query.userMedia.findFirst({
+    where: eq(userMedia.id, mediaId),
   });
+  
   if (!existingMedia) return c.json({ error: "Media not found" }, 404);
-  if (existingMedia.userId !== userId)
-    return c.json({ error: "Unauthorized" }, 403);
+  if (existingMedia.userId !== userId) return c.json({ error: "Unauthorized" }, 403);
 
-  await prisma.userMedia.delete({ where: { id: mediaId } });
+  await db.delete(userMedia).where(eq(userMedia.id, mediaId));
   return c.json({ message: "Media deleted successfully" });
 });
 

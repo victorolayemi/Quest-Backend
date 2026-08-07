@@ -1,13 +1,22 @@
+
 import { Hono } from 'hono';
-import { getPrisma } from '../utils/prisma';
+import { getDrizzle } from '../utils/drizzle';
+import { eq, sql, desc, and } from 'drizzle-orm';
+import { 
+  quiz, 
+  question, 
+  quizAttempt, 
+  user 
+} from '../db/schema';
 import { authMiddleware } from '../middleware/auth';
 import { adminAuthMiddleware } from '../middleware/adminAuth';
-import { grantCoins } from '../utils/economy';
+import { grantCoinsDrizzle as grantCoins } from '../utils/economy';
 
-// src/routes/quizzes.ts
 import { Bindings, Variables } from '../types';
 var quizzes = new Hono<{Bindings: Bindings, Variables: Variables}>();
+
 quizzes.use("*", authMiddleware);
+
 quizzes.get("/solo/categories", async (c) => {
   return c.json([
     { id: "gospels", name: "Gospels", count: 5 },
@@ -16,6 +25,7 @@ quizzes.get("/solo/categories", async (c) => {
     { id: "genesis", name: "Genesis", count: 2 }
   ]);
 });
+
 quizzes.get("/solo/difficulties", async (c) => {
   return c.json([
     { id: "easy", name: "Easy", multiplier: 1 },
@@ -23,50 +33,74 @@ quizzes.get("/solo/difficulties", async (c) => {
     { id: "hard", name: "Hard", multiplier: 2 }
   ]);
 });
+
 quizzes.get("/solo", async (c) => {
-  const prisma = getPrisma(c.env.DB);
+  const db = getDrizzle(c.env.DB);
   const category = c.req.query("category");
   const difficulty = c.req.query("difficulty");
-  const list = await prisma.quiz.findMany({
-    where: {
-      category: category || void 0,
-      difficulty: difficulty || void 0
-    },
-    include: {
+  
+  let conditions = [];
+  if (category) conditions.push(eq(quiz.category, category));
+  if (difficulty) conditions.push(eq(quiz.difficulty, difficulty));
+  
+  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+  
+  const list = await db.query.quiz.findMany({
+    where: whereClause,
+    with: {
       questions: true
     }
   });
+  
   if (list.length === 0) {
-    const defaultQuiz = await prisma.quiz.create({
-      data: {
-        title: "Gospels Basics",
-        category: "gospels",
-        difficulty: "easy",
-        points: 50,
-        questions: {
-          create: [
-            {
-              questionText: "How many books are in the Gospels?",
-              options: JSON.stringify(["3", "4", "5", "6"]),
-              correctAnswerIndex: 1,
-              // '4'
-              points: 10
-            },
-            {
-              questionText: "Who wrote the Gospel of Luke?",
-              options: JSON.stringify(["Luke", "Matthew", "Mark", "John"]),
-              correctAnswerIndex: 0,
-              points: 10
-            }
-          ]
-        }
+    const newQuizId = crypto.randomUUID();
+    const [defaultQuiz] = await db.insert(quiz).values({
+      id: newQuizId,
+      title: "Gospels Basics",
+      category: "gospels",
+      difficulty: "easy",
+      points: 50,
+    }).returning();
+    
+    await db.insert(question).values([
+      {
+        id: crypto.randomUUID(),
+        quizId: newQuizId,
+        questionText: "How many books are in the Gospels?",
+        options: JSON.stringify(["3", "4", "5", "6"]),
+        correctAnswerIndex: 1,
+        points: 10
       },
-      include: {
+      {
+        id: crypto.randomUUID(),
+        quizId: newQuizId,
+        questionText: "Who wrote the Gospel of Luke?",
+        options: JSON.stringify(["Luke", "Matthew", "Mark", "John"]),
+        correctAnswerIndex: 0,
+        points: 10
+      }
+    ]);
+    
+    const fetchedQuiz = await db.query.quiz.findFirst({
+      where: eq(quiz.id, newQuizId),
+      with: {
         questions: true
       }
     });
-    return c.json([defaultQuiz]);
+    
+    if (fetchedQuiz) {
+      const formatted = {
+        ...fetchedQuiz,
+        questions: fetchedQuiz.questions.map((qn: any) => ({
+          ...qn,
+          options: JSON.parse(qn.options)
+        }))
+      };
+      return c.json([formatted]);
+    }
+    return c.json([]);
   }
+  
   const formatted = list.map((q: any) => ({
     ...q,
     questions: q.questions.map((qn: any) => ({
@@ -76,49 +110,57 @@ quizzes.get("/solo", async (c) => {
   }));
   return c.json(formatted);
 });
+
 quizzes.get("/solo/:quizId", async (c) => {
   const quizId = c.req.param("quizId");
-  const prisma = getPrisma(c.env.DB);
-  const quiz = await prisma.quiz.findUnique({
-    where: { id: quizId },
-    include: { questions: true }
+  const db = getDrizzle(c.env.DB);
+  
+  const quizObj = await db.query.quiz.findFirst({
+    where: eq(quiz.id, quizId),
+    with: { questions: true }
   });
-  if (!quiz) {
+  
+  if (!quizObj) {
     return c.json({ error: "Quiz not found" }, 404);
   }
   return c.json({
-    ...quiz,
-    questions: quiz.questions.map((qn: any) => ({
+    ...quizObj,
+    questions: quizObj.questions.map((qn: any) => ({
       ...qn,
       options: JSON.parse(qn.options)
     }))
   });
 });
+
 quizzes.post("/solo/:quizId/start", async (c) => {
   const quizId = c.req.param("quizId");
-  const prisma = getPrisma(c.env.DB);
-  const quiz = await prisma.quiz.findUnique({ where: { id: quizId } });
-  if (!quiz) return c.json({ error: "Quiz not found" }, 404);
+  const db = getDrizzle(c.env.DB);
+  const quizObj = await db.query.quiz.findFirst({ where: eq(quiz.id, quizId) });
+  if (!quizObj) return c.json({ error: "Quiz not found" }, 404);
   return c.json({
     message: "Quiz session started",
     quizId,
-    startTime: /* @__PURE__ */ new Date()
+    startTime: new Date().toISOString()
   });
 });
+
 quizzes.post("/solo/:quizId/submit", async (c) => {
-  const userId = c.get("userId");
+  const userId = c.get("userId") as string;
   const quizId = c.req.param("quizId");
-  const body = await c.req.json();
+  const body = await c.req.json() as any;
   const { answers } = body;
-  const prisma = getPrisma(c.env.DB);
-  const quiz = await prisma.quiz.findUnique({
-    where: { id: quizId },
-    include: { questions: true }
+  const db = getDrizzle(c.env.DB);
+  
+  const quizObj = await db.query.quiz.findFirst({
+    where: eq(quiz.id, quizId),
+    with: { questions: true }
   });
-  if (!quiz) return c.json({ error: "Quiz not found" }, 404);
+  
+  if (!quizObj) return c.json({ error: "Quiz not found" }, 404);
   let score = 0;
   let pointsEarned = 0;
-  quiz.questions.forEach((q: any) => {
+  
+  quizObj.questions.forEach((q: any) => {
     const parsedOptions = JSON.parse(q.options);
     const sub = (answers || []).find((a: any) => a.questionId === q.id);
     if (sub && sub.selectedIndex === q.correctAnswerIndex) {
@@ -126,71 +168,76 @@ quizzes.post("/solo/:quizId/submit", async (c) => {
       pointsEarned += q.points;
     }
   });
-  pointsEarned += quiz.points;
-  const attempt = await prisma.quizAttempt.create({
-    data: {
-      userId,
-      quizId,
-      score,
-      pointsEarned
-    }
-  });
-  await prisma.user.update({
-    where: { id: userId },
-    data: {
-      points: { increment: pointsEarned },
-      quizPoints: { increment: pointsEarned }
-    }
-  });
+  pointsEarned += quizObj.points;
+  
+  const [attempt] = await db.insert(quizAttempt).values({
+    id: crypto.randomUUID(),
+    userId,
+    quizId,
+    score,
+    pointsEarned,
+    completedAt: sql`CURRENT_TIMESTAMP`
+  }).returning();
+  
+  await db.update(user).set({
+    points: sql`${user.points} + ${pointsEarned}`,
+    quizPoints: sql`${user.quizPoints} + ${pointsEarned}`
+  }).where(eq(user.id, userId));
 
-  const coinRes = await grantCoins(prisma, userId, pointsEarned, "Completed a Quiz");
+  const coinRes = await grantCoins(db, userId, pointsEarned, "Completed a Quiz");
 
   return c.json({
     message: "Quiz submitted successfully",
     attempt,
-    questionsCount: quiz.questions.length,
+    questionsCount: quizObj.questions.length,
     correctAnswers: score,
     pointsEarned,
     coinBalance: coinRes.newBalance
   });
 });
+
 quizzes.get("/solo/:quizId/result", async (c) => {
-  const userId = c.get("userId");
+  const userId = c.get("userId") as string;
   const quizId = c.req.param("quizId");
-  const prisma = getPrisma(c.env.DB);
-  const attempt = await prisma.quizAttempt.findFirst({
-    where: { userId, quizId },
-    orderBy: { completedAt: "desc" }
+  const db = getDrizzle(c.env.DB);
+  
+  const attempt = await db.query.quizAttempt.findFirst({
+    where: and(eq(quizAttempt.userId, userId), eq(quizAttempt.quizId, quizId)),
+    orderBy: [desc(quizAttempt.completedAt)]
   });
+  
   if (!attempt) {
     return c.json({ error: "No attempts found for this quiz" }, 404);
   }
   return c.json(attempt);
 });
+
 quizzes.get("/solo/history", async (c) => {
-  const userId = c.get("userId");
-  const prisma = getPrisma(c.env.DB);
-  const history = await prisma.quizAttempt.findMany({
-    where: { userId },
-    include: { quiz: true },
-    orderBy: { completedAt: "desc" }
+  const userId = c.get("userId") as string;
+  const db = getDrizzle(c.env.DB);
+  
+  const history = await db.query.quizAttempt.findMany({
+    where: eq(quizAttempt.userId, userId),
+    with: { quiz: true },
+    orderBy: [desc(quizAttempt.completedAt)]
   });
   return c.json(history);
 });
+
 quizzes.get("/solo/leaderboard", async (c) => {
-  const prisma = getPrisma(c.env.DB);
-  const usersList = await prisma.user.findMany({
-    orderBy: { points: "desc" },
-    select: {
-      id: true,
-      username: true,
-      avatarUrl: true,
-      points: true
-    },
-    take: 20
-  });
+  const db = getDrizzle(c.env.DB);
+  
+  const usersList = await db.select({
+    id: user.id,
+    username: user.username,
+    avatarUrl: user.avatarUrl,
+    points: user.points
+  })
+  .from(user)
+  .orderBy(desc(user.points))
+  .limit(20);
+  
   return c.json(usersList);
 });
-
 
 export default quizzes;

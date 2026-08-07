@@ -1,24 +1,26 @@
 import { Hono } from "hono";
-import { getPrisma } from "../utils/prisma";
+import { getDrizzle } from "../utils/drizzle";
 import { authMiddleware } from "../middleware/auth";
 import { adminAuthMiddleware } from "../middleware/adminAuth";
+import { globalSettings as globalSettingsTable } from "../db/schema";
+import { eq } from "drizzle-orm";
+import { Bindings, Variables } from "../types";
 
-const settings = new Hono<{ Bindings: { DB: D1Database } }>();
+const settings = new Hono<{ Bindings: Bindings, Variables: Variables }>();
 
 // Public endpoint to get non-sensitive settings (e.g., OTP enabled, OTP method)
 settings.get("/public", async (c) => {
-  const prisma = getPrisma(c.env.DB);
-  let globalSettings = await prisma.globalSettings.findUnique({ where: { id: "default" } });
+  const db = getDrizzle(c.env.DB);
+  let globalSettings = await db.query.globalSettings.findFirst({ where: (s, { eq }) => eq(s.id, "default") });
   
   if (!globalSettings) {
-    globalSettings = await prisma.globalSettings.create({
-      data: { id: "default" }
-    });
+    const arr = await db.insert(globalSettingsTable).values({ id: "default", updatedAt: new Date().toISOString() }).returning();
+    globalSettings = arr[0];
   }
   
   return c.json({ 
     settings: {
-      registrationOtpEnabled: globalSettings.registrationOtpEnabled,
+      registrationOtpEnabled: Boolean(globalSettings.registrationOtpEnabled),
       otpMethod: globalSettings.otpMethod,
     } 
   });
@@ -26,52 +28,51 @@ settings.get("/public", async (c) => {
 
 // User endpoint to get current settings
 settings.get("/", authMiddleware, async (c) => {
-  const prisma = getPrisma(c.env.DB);
-  let globalSettings = await prisma.globalSettings.findUnique({ where: { id: "default" } });
+  const db = getDrizzle(c.env.DB);
+  let globalSettings = await db.query.globalSettings.findFirst({ where: (s, { eq }) => eq(s.id, "default") });
   
   if (!globalSettings) {
-    globalSettings = await prisma.globalSettings.create({
-      data: { id: "default" }
-    });
+    const arr = await db.insert(globalSettingsTable).values({ id: "default", updatedAt: new Date().toISOString() }).returning();
+    globalSettings = arr[0];
   }
   
   // Don't expose SMTP password to regular users
   const { smtpPass, ...safeSettings } = globalSettings;
-  return c.json({ settings: safeSettings });
+  return c.json({ settings: { ...safeSettings, registrationOtpEnabled: Boolean(safeSettings.registrationOtpEnabled) } });
 });
 
 // Admin endpoint to update settings
 settings.put("/admin", adminAuthMiddleware, async (c) => {
-  const prisma = getPrisma(c.env.DB);
+  const db = getDrizzle(c.env.DB);
   const body = await c.req.json();
   
-  let globalSettings = await prisma.globalSettings.findUnique({ where: { id: "default" } });
+  let globalSettings = await db.query.globalSettings.findFirst({ where: (s, { eq }) => eq(s.id, "default") });
   if (!globalSettings) {
-    globalSettings = await prisma.globalSettings.create({ data: { id: "default" } });
+    const arr = await db.insert(globalSettingsTable).values({ id: "default", updatedAt: new Date().toISOString() }).returning();
+    globalSettings = arr[0];
   }
 
-  const updatedSettings = await prisma.globalSettings.update({
-    where: { id: "default" },
-    data: {
-      videoUploadSizeLimitMB: body.videoUploadSizeLimitMB ?? globalSettings.videoUploadSizeLimitMB,
-      videoUploadDurationLimitSec: body.videoUploadDurationLimitSec ?? globalSettings.videoUploadDurationLimitSec,
-      audioUploadSizeLimitMB: body.audioUploadSizeLimitMB ?? globalSettings.audioUploadSizeLimitMB,
-      audioUploadDurationLimitSec: body.audioUploadDurationLimitSec ?? globalSettings.audioUploadDurationLimitSec,
-      devotionVideoSizeLimitMB: body.devotionVideoSizeLimitMB ?? globalSettings.devotionVideoSizeLimitMB,
-      devotionVideoDurationLimitSec: body.devotionVideoDurationLimitSec ?? globalSettings.devotionVideoDurationLimitSec,
-      registrationOtpEnabled: body.registrationOtpEnabled ?? globalSettings.registrationOtpEnabled,
-      otpMethod: body.otpMethod ?? globalSettings.otpMethod,
-      smtpHost: body.smtpHost ?? globalSettings.smtpHost,
-      smtpPort: body.smtpPort ?? globalSettings.smtpPort,
-      smtpUser: body.smtpUser ?? globalSettings.smtpUser,
-      smtpPass: body.smtpPass ?? globalSettings.smtpPass,
-      smtpFrom: body.smtpFrom ?? globalSettings.smtpFrom,
-    }
-  });
+  const updatedArr = await db.update(globalSettingsTable).set({
+    videoUploadSizeLimitMB: body.videoUploadSizeLimitMB ?? globalSettings.videoUploadSizeLimitMB,
+    videoUploadDurationLimitSec: body.videoUploadDurationLimitSec ?? globalSettings.videoUploadDurationLimitSec,
+    audioUploadSizeLimitMB: body.audioUploadSizeLimitMB ?? globalSettings.audioUploadSizeLimitMB,
+    audioUploadDurationLimitSec: body.audioUploadDurationLimitSec ?? globalSettings.audioUploadDurationLimitSec,
+    devotionVideoSizeLimitMB: body.devotionVideoSizeLimitMB ?? globalSettings.devotionVideoSizeLimitMB,
+    devotionVideoDurationLimitSec: body.devotionVideoDurationLimitSec ?? globalSettings.devotionVideoDurationLimitSec,
+    registrationOtpEnabled: body.registrationOtpEnabled !== undefined ? (body.registrationOtpEnabled ? true : false) : globalSettings.registrationOtpEnabled,
+    otpMethod: body.otpMethod ?? globalSettings.otpMethod,
+    smtpHost: body.smtpHost ?? globalSettings.smtpHost,
+    smtpPort: body.smtpPort ?? globalSettings.smtpPort,
+    smtpUser: body.smtpUser ?? globalSettings.smtpUser,
+    smtpPass: body.smtpPass ?? globalSettings.smtpPass,
+    smtpFrom: body.smtpFrom ?? globalSettings.smtpFrom,
+  }).where(eq(globalSettingsTable.id, "default")).returning();
+
+  const updatedSettings = updatedArr[0];
 
   // Don't return smtp password in response
   const { smtpPass, ...safeUpdatedSettings } = updatedSettings;
-  return c.json({ message: "Settings updated successfully", settings: safeUpdatedSettings });
+  return c.json({ message: "Settings updated successfully", settings: { ...safeUpdatedSettings, registrationOtpEnabled: Boolean(safeUpdatedSettings.registrationOtpEnabled) } });
 });
 
 export default settings;

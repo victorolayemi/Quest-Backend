@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { getPrisma } from '../utils/prisma';
+import { getDrizzle } from '../utils/drizzle';
 import { authMiddleware } from '../middleware/auth';
 import { adminAuthMiddleware } from '../middleware/adminAuth';
 
@@ -36,8 +36,8 @@ misc.get("/onboarding/options", (c) => {
   });
 });
 misc.get("/features", async (c) => {
-  const prisma = getPrisma(c.env.DB);
-  const features = await prisma.appFeature.findMany();
+  const db = getDrizzle(c.env.DB);
+  const features = await db.query.appFeature.findMany();
   const featureMap = features.reduce(
     (acc: any, feature: any) => {
       acc[feature.key] = feature.isEnabled;
@@ -47,6 +47,5 @@ misc.get("/features", async (c) => {
   );
   return c.json(featureMap);
 });
-
 
 export default misc;

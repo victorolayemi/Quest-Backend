@@ -1,32 +1,33 @@
 import { Hono } from 'hono';
-import { getPrisma } from '../utils/prisma';
-import { authMiddleware } from '../middleware/auth';
+import { getDrizzle } from '../utils/drizzle';
+import { eq, desc, sql } from 'drizzle-orm';
+import { devotionPlan, book, devotionDay, dailyBread, affirmation, sermonMedia, userMedia } from '../db/schema';
 import { adminAuthMiddleware } from '../middleware/adminAuth';
-
-// src/routes/contentAdmin.ts
 import { Bindings, Variables } from '../types';
+
 var contentAdmin = new Hono<{Bindings: Bindings, Variables: Variables}>();
+contentAdmin.use("*", adminAuthMiddleware);
 
 contentAdmin.get("/approvals/pending", async (c) => {
-  const prisma = getPrisma(c.env.DB);
+  const db = getDrizzle(c.env.DB);
   
-  const pendingDevotions = await prisma.devotionPlan.findMany({
-    where: { status: "PENDING_REVIEW" },
-    include: { authorUser: { select: { username: true, email: true, firstName: true, lastName: true } } },
-    orderBy: { createdAt: "desc" }
+  const pendingDevotions = await db.query.devotionPlan.findMany({
+    where: eq(devotionPlan.status, "PENDING_REVIEW"),
+    with: { user: { columns: { username: true, email: true, firstName: true, lastName: true } } },
+    orderBy: [desc(devotionPlan.createdAt)]
   });
   
-  const pendingBooks = await prisma.book.findMany({
-    where: { status: "PENDING_REVIEW" },
-    include: { authorUser: { select: { username: true, email: true, firstName: true, lastName: true } } },
-    orderBy: { createdAt: "desc" }
+  const pendingBooks = await db.query.book.findMany({
+    where: eq(book.status, "PENDING_REVIEW"),
+    with: { user: { columns: { username: true, email: true, firstName: true, lastName: true } } },
+    orderBy: [desc(book.createdAt)]
   });
   
   const mappedDevotions = pendingDevotions.map(d => ({
     id: d.id,
     type: "DEVOTION",
     title: d.title,
-    authorName: d.authorUser ? `${d.authorUser.firstName} ${d.authorUser.lastName}` : d.authorName,
+    authorName: d.user ? `${d.user.firstName} ${d.user.lastName}` : d.authorName,
     submittedAt: d.createdAt
   }));
   
@@ -34,32 +35,26 @@ contentAdmin.get("/approvals/pending", async (c) => {
     id: b.id,
     type: "BOOK",
     title: b.title,
-    authorName: b.authorUser ? `${b.authorUser.firstName} ${b.authorUser.lastName}` : b.author,
+    authorName: b.user ? `${b.user.firstName} ${b.user.lastName}` : b.author,
     submittedAt: b.createdAt
   }));
   
-  return c.json([...mappedDevotions, ...mappedBooks].sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime()));
+  return c.json([...mappedDevotions, ...mappedBooks].sort((a, b) => new Date(b.submittedAt as string).getTime() - new Date(a.submittedAt as string).getTime()));
 });
 
 contentAdmin.post("/approvals/:type/:id", async (c) => {
-  const prisma = getPrisma(c.env.DB);
+  const db = getDrizzle(c.env.DB);
   const type = c.req.param("type").toUpperCase();
   const id = c.req.param("id");
-  const body = await c.req.json();
-  const { action } = body; // "APPROVE" or "REJECT"
+  const body = await c.req.json() as any;
+  const { action } = body;
   const newStatus = action === "APPROVE" ? "APPROVED" : "REJECTED";
   
   if (type === "DEVOTION") {
-    const updated = await prisma.devotionPlan.update({
-      where: { id },
-      data: { status: newStatus }
-    });
+    const [updated] = await db.update(devotionPlan).set({ status: newStatus }).where(eq(devotionPlan.id, id)).returning();
     return c.json({ success: true, status: updated.status });
   } else if (type === "BOOK") {
-    const updated = await prisma.book.update({
-      where: { id },
-      data: { status: newStatus }
-    });
+    const [updated] = await db.update(book).set({ status: newStatus }).where(eq(book.id, id)).returning();
     return c.json({ success: true, status: updated.status });
   }
   
@@ -67,14 +62,18 @@ contentAdmin.post("/approvals/:type/:id", async (c) => {
 });
 
 contentAdmin.get("/devotions/plans", async (c) => {
-  const prisma = getPrisma(c.env.DB);
-  const plans = await prisma.devotionPlan.findMany({
-    include: { _count: { select: { days: true } } }
-  });
-  return c.json({ plans });
+  const db = getDrizzle(c.env.DB);
+  const plansData = await db.query.devotionPlan.findMany({});
+  
+  const mapped = await Promise.all(plansData.map(async (p) => {
+    const [dc] = await db.select({ count: sql<number>`count(*)` }).from(devotionDay).where(eq(devotionDay.planId, p.id));
+    return { ...p, _count: { days: Number(dc.count) } };
+  }));
+  return c.json({ plans: mapped });
 });
+
 contentAdmin.post("/devotions/plans", async (c) => {
-  const prisma = getPrisma(c.env.DB);
+  const db = getDrizzle(c.env.DB);
   let data: any = {};
   const contentType = c.req.header("content-type") || "";
   
@@ -102,16 +101,18 @@ contentAdmin.post("/devotions/plans", async (c) => {
     data = await c.req.json();
   }
 
-  const plan = await prisma.devotionPlan.create({ data });
+  const [plan] = await db.insert(devotionPlan).values({ id: crypto.randomUUID(), ...data }).returning();
   return c.json({ plan });
 });
+
 contentAdmin.delete("/devotions/plans/:id", async (c) => {
-  const prisma = getPrisma(c.env.DB);
-  await prisma.devotionPlan.delete({ where: { id: c.req.param("id") } });
+  const db = getDrizzle(c.env.DB);
+  await db.delete(devotionPlan).where(eq(devotionPlan.id, c.req.param("id") as string));
   return c.json({ success: true });
 });
+
 contentAdmin.put("/devotions/plans/:id", async (c) => {
-  const prisma = getPrisma(c.env.DB);
+  const db = getDrizzle(c.env.DB);
   let updateData: any = {};
   const contentType = c.req.header("content-type") || "";
 
@@ -136,48 +137,47 @@ contentAdmin.put("/devotions/plans/:id", async (c) => {
       updateData.image = `${origin}/api/v1/media/download/${fileKey}`;
     }
   } else {
-    const body = await c.req.json();
+    const body = await c.req.json() as any;
     const { _count, id, createdAt, days, ...data } = body;
     updateData = data;
   }
 
-  const plan = await prisma.devotionPlan.update({
-    where: { id: c.req.param("id") },
-    data: updateData
-  });
+  const [plan] = await db.update(devotionPlan).set(updateData).where(eq(devotionPlan.id, c.req.param("id") as string)).returning();
   return c.json({ plan });
 });
+
 contentAdmin.get("/devotions/plans/:planId/days", async (c) => {
-  const prisma = getPrisma(c.env.DB);
-  const days = await prisma.devotionDay.findMany({
-    where: { planId: c.req.param("planId") },
-    orderBy: { dayNumber: "asc" }
+  const db = getDrizzle(c.env.DB);
+  const days = await db.query.devotionDay.findMany({
+    where: eq(devotionDay.planId, c.req.param("planId") as string),
+    orderBy: (d, { asc }) => [asc(d.dayNumber)]
   });
   return c.json({ days });
 });
+
 contentAdmin.post("/devotions/days", async (c) => {
-  const prisma = getPrisma(c.env.DB);
-  const body = await c.req.json();
-  const day2 = await prisma.devotionDay.create({ data: body });
+  const db = getDrizzle(c.env.DB);
+  const body = await c.req.json() as any;
+  const [day2] = await db.insert(devotionDay).values({ id: crypto.randomUUID(), ...body }).returning();
   return c.json({ day: day2 });
 });
+
 contentAdmin.delete("/devotions/days/:id", async (c) => {
-  const prisma = getPrisma(c.env.DB);
-  await prisma.devotionDay.delete({ where: { id: c.req.param("id") } });
+  const db = getDrizzle(c.env.DB);
+  await db.delete(devotionDay).where(eq(devotionDay.id, c.req.param("id") as string));
   return c.json({ success: true });
 });
+
 contentAdmin.put("/devotions/days/:id", async (c) => {
-  const prisma = getPrisma(c.env.DB);
-  const body = await c.req.json();
-  const day2 = await prisma.devotionDay.update({
-    where: { id: c.req.param("id") },
-    data: body
-  });
+  const db = getDrizzle(c.env.DB);
+  const body = await c.req.json() as any;
+  const [day2] = await db.update(devotionDay).set(body).where(eq(devotionDay.id, c.req.param("id") as string)).returning();
   return c.json({ day: day2 });
 });
+
 contentAdmin.post("/devotions/bulk-import", async (c) => {
-  const prisma = getPrisma(c.env.DB);
-  const body = await c.req.json();
+  const db = getDrizzle(c.env.DB);
+  const body = await c.req.json() as any;
   const plansData = body.plans;
 
   if (!Array.isArray(plansData)) {
@@ -187,58 +187,63 @@ contentAdmin.post("/devotions/bulk-import", async (c) => {
   const createdPlans = [];
   for (const p of plansData) {
     const { days, ...planData } = p;
-    const plan = await prisma.devotionPlan.create({
-      data: {
-        ...planData,
-        days: {
-          create: days
-        }
-      }
-    });
+    const [plan] = await db.insert(devotionPlan).values({ id: crypto.randomUUID(), ...planData }).returning();
+    if (days && days.length > 0) {
+      const daysToInsert = days.map((d: any) => ({ ...d, id: crypto.randomUUID(), planId: plan.id }));
+      await db.insert(devotionDay).values(daysToInsert);
+    }
     createdPlans.push(plan);
   }
 
   return c.json({ success: true, created: createdPlans.length });
 });
+
 contentAdmin.get("/daily-bread", async (c) => {
-  const prisma = getPrisma(c.env.DB);
-  const breads = await prisma.dailyBread.findMany({ orderBy: { date: "desc" } });
+  const db = getDrizzle(c.env.DB);
+  const breads = await db.query.dailyBread.findMany({ orderBy: [desc(dailyBread.date)] });
   return c.json({ breads });
 });
+
 contentAdmin.post("/daily-bread", async (c) => {
-  const prisma = getPrisma(c.env.DB);
-  const body = await c.req.json();
-  const bread = await prisma.dailyBread.create({ data: body });
+  const db = getDrizzle(c.env.DB);
+  const body = await c.req.json() as any;
+  const [bread] = await db.insert(dailyBread).values({ id: crypto.randomUUID(), ...body }).returning();
   return c.json({ bread });
 });
+
 contentAdmin.delete("/daily-bread/:id", async (c) => {
-  const prisma = getPrisma(c.env.DB);
-  await prisma.dailyBread.delete({ where: { id: c.req.param("id") } });
+  const db = getDrizzle(c.env.DB);
+  await db.delete(dailyBread).where(eq(dailyBread.id, c.req.param("id") as string));
   return c.json({ success: true });
 });
+
 contentAdmin.get("/affirmations", async (c) => {
-  const prisma = getPrisma(c.env.DB);
-  const affirmations = await prisma.affirmation.findMany({ orderBy: { createdAt: "desc" } });
+  const db = getDrizzle(c.env.DB);
+  const affirmations = await db.query.affirmation.findMany({ orderBy: [desc(affirmation.createdAt)] });
   return c.json({ affirmations });
 });
+
 contentAdmin.post("/affirmations", async (c) => {
-  const prisma = getPrisma(c.env.DB);
-  const body = await c.req.json();
-  const affirmation = await prisma.affirmation.create({ data: body });
-  return c.json({ affirmation });
+  const db = getDrizzle(c.env.DB);
+  const body = await c.req.json() as any;
+  const [newAffirmation] = await db.insert(affirmation).values({ id: crypto.randomUUID(), ...body }).returning();
+  return c.json({ affirmation: newAffirmation });
 });
+
 contentAdmin.delete("/affirmations/:id", async (c) => {
-  const prisma = getPrisma(c.env.DB);
-  await prisma.affirmation.delete({ where: { id: c.req.param("id") } });
+  const db = getDrizzle(c.env.DB);
+  await db.delete(affirmation).where(eq(affirmation.id, c.req.param("id") as string));
   return c.json({ success: true });
 });
+
 contentAdmin.get("/books", async (c) => {
-  const prisma = getPrisma(c.env.DB);
-  const books2 = await prisma.book.findMany({ orderBy: { createdAt: "desc" } });
+  const db = getDrizzle(c.env.DB);
+  const books2 = await db.query.book.findMany({ orderBy: [desc(book.createdAt)] });
   return c.json({ books: books2 });
 });
+
 contentAdmin.post("/books", async (c) => {
-  const prisma = getPrisma(c.env.DB);
+  const db = getDrizzle(c.env.DB);
   let title, author, description, topic, downloadUrl, imageUrl;
 
   try {
@@ -271,7 +276,7 @@ contentAdmin.post("/books", async (c) => {
       imageUrl = `${origin}/api/v1/media/download/${thumbKey}`;
     }
   } catch (e) {
-    const body = await c.req.json();
+    const body = await c.req.json() as any;
     title = body.title;
     author = body.author || "Unknown";
     description = body.description || "";
@@ -280,21 +285,20 @@ contentAdmin.post("/books", async (c) => {
     imageUrl = body.imageUrl || "";
   }
 
-  const book = await prisma.book.create({ 
-    data: {
+  const [newBook] = await db.insert(book).values({
+      id: crypto.randomUUID(),
       title,
       author,
       description,
       topic,
       downloadUrl: downloadUrl || "",
       imageUrl: imageUrl || ""
-    } 
-  });
-  return c.json({ book });
+  }).returning();
+  return c.json({ book: newBook });
 });
 
 contentAdmin.put("/books/:id", async (c) => {
-  const prisma = getPrisma(c.env.DB);
+  const db = getDrizzle(c.env.DB);
   const id = c.req.param("id");
   let title, author, description, topic, downloadUrl, imageUrl;
 
@@ -328,7 +332,7 @@ contentAdmin.put("/books/:id", async (c) => {
       imageUrl = `${origin}/api/v1/media/download/${thumbKey}`;
     }
   } catch (e) {
-    const body = await c.req.json();
+    const body = await c.req.json() as any;
     title = body.title;
     author = body.author;
     description = body.description;
@@ -345,22 +349,21 @@ contentAdmin.put("/books/:id", async (c) => {
   if (downloadUrl !== undefined) updateData.downloadUrl = downloadUrl;
   if (imageUrl !== undefined) updateData.imageUrl = imageUrl;
 
-  const book = await prisma.book.update({ 
-    where: { id },
-    data: updateData
-  });
-  return c.json({ book });
+  const [updatedBook] = await db.update(book).set(updateData).where(eq(book.id, id as string)).returning();
+  return c.json({ book: updatedBook });
 });
+
 contentAdmin.delete("/books/:id", async (c) => {
-  const prisma = getPrisma(c.env.DB);
-  await prisma.book.delete({ where: { id: c.req.param("id") } });
+  const db = getDrizzle(c.env.DB);
+  await db.delete(book).where(eq(book.id, c.req.param("id") as string));
   return c.json({ success: true });
 });
+
 contentAdmin.get("/media", async (c) => {
-  const prisma = getPrisma(c.env.DB);
-  const media2 = await prisma.sermonMedia.findMany({ orderBy: { createdAt: "desc" } });
-  const userMedia = await prisma.userMedia.findMany({ include: { user: true }, orderBy: { createdAt: "desc" } });
-  const uMapped = userMedia.map(m => ({
+  const db = getDrizzle(c.env.DB);
+  const media2 = await db.query.sermonMedia.findMany({ orderBy: [desc(sermonMedia.createdAt)] });
+  const userMedias = await db.query.userMedia.findMany({ with: { user: true }, orderBy: [desc(userMedia.createdAt)] });
+  const uMapped = userMedias.map(m => ({
     id: m.id,
     title: m.title,
     author: m.user ? `${m.user.firstName} ${m.user.lastName}` : 'Unknown',
@@ -371,11 +374,12 @@ contentAdmin.get("/media", async (c) => {
     category: "Reel",
     createdAt: m.createdAt
   }));
-  const all = [...media2, ...uMapped].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  const all = [...media2, ...uMapped].sort((a, b) => new Date(b.createdAt as string).getTime() - new Date(a.createdAt as string).getTime());
   return c.json({ media: all });
 });
+
 contentAdmin.post("/media", async (c) => {
-  const prisma = getPrisma(c.env.DB);
+  const db = getDrizzle(c.env.DB);
   let title, author, category, type, mediaUrl, imageUrl, duration;
 
   try {
@@ -416,7 +420,7 @@ contentAdmin.post("/media", async (c) => {
     duration = "00:00";
   } catch (e) {
     // Fallback if not multipart/form-data
-    const body = await c.req.json();
+    const body = await c.req.json() as any;
     title = body.title;
     author = body.author || "Unknown";
     category = body.category || "Sermon";
@@ -426,8 +430,8 @@ contentAdmin.post("/media", async (c) => {
     duration = body.duration || "00:00";
   }
 
-  const media2 = await prisma.sermonMedia.create({ 
-    data: {
+  const [media2] = await db.insert(sermonMedia).values({
+      id: crypto.randomUUID(),
       title,
       author,
       category,
@@ -435,12 +439,12 @@ contentAdmin.post("/media", async (c) => {
       mediaUrl,
       imageUrl,
       duration
-    }
-  });
+  }).returning();
   return c.json({ media: media2 });
 });
+
 contentAdmin.put("/media/:id", async (c) => {
-  const prisma = getPrisma(c.env.DB);
+  const db = getDrizzle(c.env.DB);
   const id = c.req.param("id");
   let title, author, category, type, mediaUrl, imageUrl, duration;
 
@@ -476,7 +480,7 @@ contentAdmin.put("/media/:id", async (c) => {
     }
   } catch (e) {
     // Fallback if not multipart/form-data
-    const body = await c.req.json();
+    const body = await c.req.json() as any;
     title = body.title;
     author = body.author;
     category = body.category;
@@ -496,43 +500,39 @@ contentAdmin.put("/media/:id", async (c) => {
   if (duration !== undefined) updateData.duration = duration;
 
   try {
-    const media2 = await prisma.sermonMedia.update({ 
-      where: { id },
-      data: updateData
-    });
+    const [media2] = await db.update(sermonMedia).set(updateData).where(eq(sermonMedia.id, id as string)).returning();
+    if (!media2) throw new Error('Not found');
     return c.json({ media: media2 });
   } catch (err) {
     // Attempt to update userMedia if sermonMedia fails
     try {
-      const mediaUser = await prisma.userMedia.update({
-        where: { id },
-        data: {
-          title: title !== undefined ? title : undefined,
-          mediaUrl: mediaUrl !== undefined ? mediaUrl : undefined,
-          imageUrl: imageUrl !== undefined ? imageUrl : undefined,
-          type: type !== undefined ? type : undefined,
-        }
-      });
+      const updatePayload: any = {};
+      if (title !== undefined) updatePayload.title = title;
+      if (mediaUrl !== undefined) updatePayload.mediaUrl = mediaUrl;
+      if (imageUrl !== undefined) updatePayload.imageUrl = imageUrl;
+      if (type !== undefined) updatePayload.type = type;
+      const [mediaUser] = await db.update(userMedia).set(updatePayload).where(eq(userMedia.id, id as string)).returning();
+      if (!mediaUser) throw new Error('Not found');
       return c.json({ media: mediaUser });
     } catch (e2) {
       return c.json({ error: "Media not found or failed to update" }, 404);
     }
   }
 });
+
 contentAdmin.delete("/media/:id", async (c) => {
-  const prisma = getPrisma(c.env.DB);
+  const db = getDrizzle(c.env.DB);
   const id = c.req.param("id");
   try {
-    await prisma.sermonMedia.delete({ where: { id } });
+    await db.delete(sermonMedia).where(eq(sermonMedia.id, id as string));
   } catch (e) {
     try {
-      await prisma.userMedia.delete({ where: { id } });
+      await db.delete(userMedia).where(eq(userMedia.id, id as string));
     } catch (e2) {
       // Ignore if not found
     }
   }
   return c.json({ success: true });
 });
-
 
 export default contentAdmin;

@@ -40,6 +40,22 @@
 			"0 12 * * *"
 		]
 	},
+	"queues": {
+		"producers": [
+			{
+				"binding": "NOTIFICATION_QUEUE",
+				"queue": "notification-queue"
+			}
+		],
+		"consumers": [
+			{
+				"queue": "notification-queue",
+				"max_batch_size": 10,
+				"max_batch_timeout": 5,
+				"max_retries": 3
+			}
+		]
+	},
 	"observability": {
 		"logs": {
 			"enabled": true,

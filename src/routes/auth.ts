@@ -2,7 +2,9 @@ import { sign } from 'hono/jwt';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 
 import { Hono } from 'hono';
-import { getPrisma } from '../utils/prisma';
+import { getDrizzle } from '../utils/drizzle';
+import { user as userTable, globalSettings as globalSettingsTable, otpRequest as otpRequestTable, loginHistory as loginHistoryTable } from '../db/schema';
+import { eq, or, and, gte, desc } from 'drizzle-orm';
 import { authMiddleware } from '../middleware/auth';
 import { adminAuthMiddleware } from '../middleware/adminAuth';
 
@@ -27,7 +29,7 @@ async function hashPasswordLegacy(password: string) {
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
 }
-async function hashPassword(password: string, existingSalt?: string) {
+async function hashPassword(password: string, existingSalt?: string, iterations: number = 10000) {
   const encoder2 = new TextEncoder();
   const passwordKey = await crypto.subtle.importKey(
     "raw",
@@ -46,7 +48,7 @@ async function hashPassword(password: string, existingSalt?: string) {
     {
       name: "PBKDF2",
       salt,
-      iterations: 1e5,
+      iterations: iterations,
       hash: "SHA-256"
     },
     passwordKey,
@@ -55,27 +57,34 @@ async function hashPassword(password: string, existingSalt?: string) {
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   const hashHex = hashArray.map((b: number) => b.toString(16).padStart(2, "0")).join("");
   const saltHex = Array.from(salt).map((b: number) => b.toString(16).padStart(2, "0")).join("");
-  return `${saltHex}:${hashHex}`;
+  return `${saltHex}:${hashHex}:${iterations}`;
 }
 async function verifyPassword(password: string, storedHash: string) {
   if (storedHash.includes(":")) {
-    const [salt, _] = storedHash.split(":");
-    const hash = await hashPassword(password, salt);
-    return hash === storedHash;
+    const parts = storedHash.split(":");
+    const salt = parts[0];
+    const iterations = parts.length === 3 ? parseInt(parts[2], 10) : 100000;
+    
+    // For legacy hashes (length 2), they were stored as `${saltHex}:${hashHex}`
+    // Our new hashPassword returns `${saltHex}:${hashHex}:${iterations}`
+    const generatedFullHash = await hashPassword(password, salt, iterations);
+    
+    if (parts.length === 2) {
+      // Compare the first two parts to the original format
+      const generatedParts = generatedFullHash.split(":");
+      return `${generatedParts[0]}:${generatedParts[1]}` === storedHash;
+    } else {
+      return generatedFullHash === storedHash;
+    }
   } else {
     const hash = await hashPasswordLegacy(password);
     return hash === storedHash;
   }
 }
 auth.post("/guest", async (c) => {
-  const prisma = getPrisma(c.env.DB);
-  const guestUser = await prisma.user.create({
-    data: {
-      isGuest: true,
-      points: 0,
-      streakCount: 0
-    }
-  });
+  const db = getDrizzle(c.env.DB);
+  const guestUserArr = await db.insert(userTable).values({ id: crypto.randomUUID(), isGuest: true, points: 0, streakCount: 0 }).returning();
+  const guestUser = guestUserArr[0];
   const token = await generateToken(guestUser.id, c.env.JWT_SECRET);
   return c.json({
     token,
@@ -84,17 +93,15 @@ auth.post("/guest", async (c) => {
 });
 auth.get("/guest/status", authMiddleware, async (c) => {
   const userId = c.get("userId");
-  const prisma = getPrisma(c.env.DB);
-  const user = await prisma.user.findUnique({
-    where: { id: userId }
-  });
-  if (!user || !user.isGuest) {
+  const db = getDrizzle(c.env.DB);
+  const userRow = await db.query.user.findFirst({ where: (users, { eq }) => eq(users.id, userId) });
+  if (!userRow || !userRow.isGuest) {
     return c.json({ error: "Not a guest session" }, 400);
   }
-  const level = Math.floor(user.points / 100) + 1;
+  const level = Math.floor(userRow.points / 100) + 1;
   return c.json({
     isGuest: true,
-    points: user.points,
+    points: userRow.points,
     level,
     playsRemaining: 3
   });
@@ -105,10 +112,10 @@ auth.post("/otp/send", async (c) => {
   if (!contact) {
     return c.json({ error: "Contact field is required" }, 400);
   }
-  const prisma = getPrisma(c.env.DB);
+  const db = getDrizzle(c.env.DB);
   
   // Fetch global settings
-  const globalSettings = await prisma.globalSettings.findUnique({ where: { id: "default" } });
+  const globalSettings = await db.query.globalSettings.findFirst({ where: (s, { eq }) => eq(s.id, "default") });
   const otpMethod = globalSettings?.otpMethod ?? "twilio";
 
   // Only skip OTP for signup when admin has disabled it
@@ -124,13 +131,7 @@ auth.post("/otp/send", async (c) => {
   crypto.getRandomValues(randomArray);
   const code = (1e3 + randomArray[0] % 9e3).toString();
   const expiresAt = new Date(Date.now() + 10 * 60 * 1e3);
-  await prisma.otpRequest.create({
-    data: {
-      contact,
-      code,
-      expiresAt
-    }
-  });
+  await db.insert(otpRequestTable).values({ id: crypto.randomUUID(), contact, code, expiresAt: expiresAt.toISOString() });
 
   const isEmail = contact.includes("@");
 
@@ -222,8 +223,8 @@ auth.post("/register", async (c) => {
   const body = await c.req.json();
   const { contact, code, password, firstName, lastName, username, gender } = body;
   
-  const prisma = getPrisma(c.env.DB);
-  const globalSettings = await prisma.globalSettings.findUnique({ where: { id: "default" } });
+  const db = getDrizzle(c.env.DB);
+  const globalSettings = await db.query.globalSettings.findFirst({ where: (s, { eq }) => eq(s.id, "default") });
   const otpEnabled = globalSettings ? globalSettings.registrationOtpEnabled : true;
 
   if (!contact || password === undefined || !username) {
@@ -235,38 +236,18 @@ auth.post("/register", async (c) => {
   }
 
   if (otpEnabled) {
-    const otpRequest = await prisma.otpRequest.findFirst({
-      where: {
-        contact,
-        code,
-        expiresAt: { gte: new Date() },
-        verified: false
-      },
-      orderBy: { expiresAt: "desc" }
-    });
+    const otpRequest = await db.query.otpRequest.findFirst({ where: (o, { eq, and, gte }) => and(eq(o.contact, contact), eq(o.code, code), eq(o.verified, false), gte(o.expiresAt, new Date().toISOString())), orderBy: (o, { desc }) => [desc(o.expiresAt)] });
     if (!otpRequest) {
       return c.json({ error: "Invalid or expired OTP" }, 400);
     }
-    await prisma.otpRequest.update({
-      where: { id: otpRequest.id },
-      data: { verified: true }
-    });
+    await db.update(otpRequestTable).set({ verified: true }).where(eq(otpRequestTable.id, otpRequest.id));
   }
 
-  const existingUsername = await prisma.user.findUnique({
-    where: { username }
-  });
+  const existingUsername = await db.query.user.findFirst({ where: (u, { eq }) => eq(u.username, username) });
   if (existingUsername) {
     return c.json({ error: "Username already taken" }, 400);
   }
-  const existingUser = await prisma.user.findFirst({
-    where: {
-      OR: [
-        { email: contact },
-        { phoneNumber: contact }
-      ]
-    }
-  });
+  const existingUser = await db.query.user.findFirst({ where: (u, { or, eq }) => or(eq(u.email, contact), eq(u.phoneNumber, contact)) });
   if (existingUser && !existingUser.isGuest) {
     return c.json({ error: "User with this contact already exists. Please login." }, 400);
   }
@@ -275,32 +256,11 @@ auth.post("/register", async (c) => {
   
   let user;
   if (existingUser && existingUser.isGuest) {
-    user = await prisma.user.update({
-      where: { id: existingUser.id },
-      data: {
-        isGuest: false,
-        email: contact.includes("@") ? contact : null,
-        phoneNumber: contact.includes("@") ? null : contact,
-        password: hashedPassword,
-        firstName,
-        lastName,
-        username,
-        gender
-      }
-    });
+    const userArr = await db.update(userTable).set({ isGuest: false, email: contact.includes("@") ? contact : null, phoneNumber: contact.includes("@") ? null : contact, password: hashedPassword, firstName, lastName, username, gender }).where(eq(userTable.id, existingUser.id)).returning();
+    user = userArr[0];
   } else {
-    user = await prisma.user.create({
-      data: {
-        email: contact.includes("@") ? contact : null,
-        phoneNumber: contact.includes("@") ? null : contact,
-        password: hashedPassword,
-        isGuest: false,
-        firstName,
-        lastName,
-        username,
-        gender
-      }
-    });
+    const userArr = await db.insert(userTable).values({ id: crypto.randomUUID(), email: contact.includes("@") ? contact : null, phoneNumber: contact.includes("@") ? null : contact, password: hashedPassword, isGuest: false, firstName, lastName, username, gender }).returning();
+    user = userArr[0];
   }
   const token = await generateToken(user.id, c.env.JWT_SECRET);
   return c.json({
@@ -316,15 +276,8 @@ auth.post("/login", async (c) => {
   if (!contact || !password) {
     return c.json({ error: "Contact and password are required" }, 400);
   }
-  const prisma = getPrisma(c.env.DB);
-  const user = await prisma.user.findFirst({
-    where: {
-      OR: [
-        { email: contact },
-        { phoneNumber: contact }
-      ]
-    }
-  });
+  const db = getDrizzle(c.env.DB);
+  const user = await db.query.user.findFirst({ where: (u, { or, eq }) => or(eq(u.email, contact), eq(u.phoneNumber, contact)) });
   if (!user || user.isGuest || !user.password) {
     return c.json({ error: "Invalid credentials or user does not exist" }, 401);
   }
@@ -332,6 +285,13 @@ auth.post("/login", async (c) => {
   if (!isValidPassword) {
     return c.json({ error: "Invalid credentials" }, 401);
   }
+  
+  // Progressive Hash Upgrade: If the user has an old hash format, upgrade it
+  if (user.password.split(":").length === 2) {
+    const upgradedHash = await hashPassword(password); // uses default 10,000 iterations
+    await db.update(userTable).set({ password: upgradedHash }).where(eq(userTable.id, user.id));
+  }
+  
   const token = await generateToken(user.id, c.env.JWT_SECRET);
   const userAgent = c.req.header("user-agent") || "";
   let browser = "Unknown";
@@ -346,14 +306,7 @@ auth.post("/login", async (c) => {
   else if (userAgent.includes("Android")) os = "Android";
   else if (userAgent.includes("iPhone") || userAgent.includes("iPad")) os = "iOS";
   const ip = c.req.header("x-forwarded-for") || c.req.header("cf-connecting-ip") || "Unknown";
-  await prisma.loginHistory.create({
-    data: {
-      userId: user.id,
-      ip,
-      browser,
-      os
-    }
-  });
+  await db.insert(loginHistoryTable).values({ id: crypto.randomUUID(), userId: user.id, ip, browser, os });
   return c.json({
     message: "Login successful",
     token,
@@ -366,46 +319,25 @@ auth.post("/password/reset", async (c) => {
   if (!contact || !code || !newPassword) {
     return c.json({ error: "Contact, code, and newPassword are required" }, 400);
   }
-  const prisma = getPrisma(c.env.DB);
-  const otpRequest = await prisma.otpRequest.findFirst({
-    where: {
-      contact,
-      code,
-      expiresAt: { gte: /* @__PURE__ */ new Date() },
-      verified: false
-    },
-    orderBy: { expiresAt: "desc" }
-  });
+  const db = getDrizzle(c.env.DB);
+  const otpRequest = await db.query.otpRequest.findFirst({ where: (o, { eq, and, gte }) => and(eq(o.contact, contact), eq(o.code, code), eq(o.verified, false), gte(o.expiresAt, new Date().toISOString())), orderBy: (o, { desc }) => [desc(o.expiresAt)] });
   if (!otpRequest) {
     return c.json({ error: "Invalid or expired OTP" }, 400);
   }
-  const user = await prisma.user.findFirst({
-    where: {
-      OR: [
-        { email: contact },
-        { phoneNumber: contact }
-      ]
-    }
-  });
+  const user = await db.query.user.findFirst({ where: (u, { or, eq }) => or(eq(u.email, contact), eq(u.phoneNumber, contact)) });
   if (!user) {
     return c.json({ error: "User does not exist" }, 404);
   }
   const hashedPassword = await hashPassword(newPassword);
-  await prisma.otpRequest.update({
-    where: { id: otpRequest.id },
-    data: { verified: true }
-  });
-  await prisma.user.update({
-    where: { id: user.id },
-    data: { password: hashedPassword }
-  });
+  await db.update(otpRequestTable).set({ verified: true }).where(eq(otpRequestTable.id, otpRequest.id));
+  await db.update(userTable).set({ password: hashedPassword }).where(eq(userTable.id, user.id));
   return c.json({
     message: "Password reset successful"
   });
 });
 auth.get("/username/suggest", async (c) => {
   const base = c.req.query("base") || "user";
-  const prisma = getPrisma(c.env.DB);
+  const db = getDrizzle(c.env.DB);
   const suggestions = [];
   for (let i = 0; i < 6; i++) {
     const letters = Math.random().toString(36).substring(2, 4);
@@ -441,19 +373,13 @@ auth.post("/google", async (c) => {
   } catch (err2) {
     return c.json({ error: "Invalid Google idToken" }, 401);
   }
-  const prisma = getPrisma(c.env.DB);
-  let user = await prisma.user.findUnique({ where: { email } });
+  const db = getDrizzle(c.env.DB);
+  let user = await db.query.user.findFirst({ where: (u, { eq }) => eq(u.email, email) });
   let isNewUser = false;
   if (!user) {
     isNewUser = true;
-    user = await prisma.user.create({
-      data: {
-        email,
-        firstName,
-        lastName,
-        isGuest: false
-      }
-    });
+    const userArr = await db.insert(userTable).values({ id: crypto.randomUUID(), email, firstName, lastName, isGuest: false }).returning();
+    user = userArr[0];
   }
   const token = await generateToken(user.id, c.env.JWT_SECRET);
   return c.json({ token, user, isNewUser });
@@ -477,19 +403,15 @@ auth.post("/apple", async (c) => {
   } catch (err2) {
     return c.json({ error: "Invalid Apple identityToken" }, 401);
   }
-  const prisma = getPrisma(c.env.DB);
-  let user = await prisma.user.findFirst({
-    where: { email: verifiedEmail }
+  const db = getDrizzle(c.env.DB);
+  let user = await db.query.user.findFirst({
+    where: (u, { eq }) => eq(u.email, verifiedEmail)
   });
   let isNewUser = false;
   if (!user) {
     isNewUser = true;
-    user = await prisma.user.create({
-      data: {
-        email: verifiedEmail,
-        isGuest: false
-      }
-    });
+    const userArr = await db.insert(userTable).values({ id: crypto.randomUUID(), email: verifiedEmail, isGuest: false }).returning();
+    user = userArr[0];
   }
   const token = await generateToken(user.id, c.env.JWT_SECRET);
   return c.json({ token, user, isNewUser });

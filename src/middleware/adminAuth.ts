@@ -1,6 +1,6 @@
 import { Context, Next } from 'hono';
 import { verify } from 'hono/jwt';
-import { getPrisma } from '../utils/prisma';
+import { getDrizzle } from '../utils/drizzle';
 import { Bindings, Variables } from '../types';
 
 export async function adminAuthMiddleware(c: Context<{Bindings: Bindings, Variables: Variables}>, next: Next) {
@@ -16,10 +16,10 @@ export async function adminAuthMiddleware(c: Context<{Bindings: Bindings, Variab
     }
     const payload = await verify(token, secret, "HS256");
     const userId = payload.sub as string;
-    const prisma = getPrisma(c.env.DB);
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { isAdmin: true }
+    const db = getDrizzle(c.env.DB);
+    const user = await db.query.user.findFirst({
+      where: (users, { eq }) => eq(users.id, userId),
+      columns: { isAdmin: true }
     });
     if (!user || !user.isAdmin) {
       return c.json({ error: "Forbidden: Admin access required" }, 403);
