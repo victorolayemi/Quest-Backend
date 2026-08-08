@@ -33,10 +33,15 @@ friends.get("/suggestions", async (c) => {
     excludeIds.add(r.receiverId);
   }
 
+  const page = parseInt(c.req.query("page") || "1");
+  const limit = parseInt(c.req.query("limit") || "10");
+  const offset = (page - 1) * limit;
+
   const suggestions = await db.query.user.findMany({
     where: (u, { notInArray, ne }) => notInArray(u.id, [...excludeIds]),
     columns: { id: true, firstName: true, lastName: true, username: true, avatarUrl: true },
-    limit: 10,
+    limit,
+    offset,
     orderBy: (u, { desc }) => [desc(u.createdAt)]
   });
 
@@ -48,21 +53,42 @@ friends.get("/", async (c) => {
   const userId = c.get("userId");
   const db = getDrizzle(c.env.DB);
   
+  const page = parseInt(c.req.query("page") || "1");
+  const limit = parseInt(c.req.query("limit") || "20");
+  const q = c.req.query("q")?.trim()?.toLowerCase();
+  const offset = (page - 1) * limit;
+
   const list = await db.query.friendRequest.findMany({
     where: or(
       and(eq(friendRequest.senderId, userId as string), eq(friendRequest.status, "ACCEPTED")),
       and(eq(friendRequest.receiverId, userId as string), eq(friendRequest.status, "ACCEPTED"))
-    ),
-    with: {
-      user_senderId: { columns: { id: true, firstName: true, lastName: true, username: true, avatarUrl: true } },
-      user_receiverId: { columns: { id: true, firstName: true, lastName: true, username: true, avatarUrl: true } }
-    }
+    )
+  });
+
+  const friendIds = list.map((r: any) => r.senderId === userId ? r.receiverId : r.senderId);
+
+  if (friendIds.length === 0) return c.json([]);
+
+  let whereClause = inArray(user.id, friendIds);
+  if (q) {
+    whereClause = and(
+      whereClause,
+      or(
+        sql`LOWER(${user.firstName}) LIKE ${'%' + q + '%'}`,
+        sql`LOWER(${user.lastName}) LIKE ${'%' + q + '%'}`,
+        sql`LOWER(${user.username}) LIKE ${'%' + q + '%'}`
+      )
+    ) as any;
+  }
+
+  const friendsList = await db.query.user.findMany({
+    where: whereClause,
+    columns: { id: true, firstName: true, lastName: true, username: true, avatarUrl: true, bio: true },
+    limit,
+    offset
   });
   
-  const output = list.map((r: any) => {
-    return r.senderId === userId ? r.user_receiverId : r.user_senderId;
-  });
-  return c.json(output);
+  return c.json(friendsList);
 });
 
 friends.post("/request", async (c) => {
@@ -192,9 +218,15 @@ friends.get("/requests/sent", async (c) => {
   const userId = c.get("userId");
   const db = getDrizzle(c.env.DB);
   
+  const page = parseInt(c.req.query("page") || "1");
+  const limit = parseInt(c.req.query("limit") || "20");
+  const offset = (page - 1) * limit;
+
   const list = await db.query.friendRequest.findMany({
     where: and(eq(friendRequest.senderId, userId as string), eq(friendRequest.status, "PENDING")),
-    with: { user_receiverId: { columns: { id: true, firstName: true, lastName: true, username: true, avatarUrl: true } } }
+    with: { user_receiverId: { columns: { id: true, firstName: true, lastName: true, username: true, avatarUrl: true } } },
+    limit,
+    offset
   });
   
   return c.json(list.map((r: any) => r.user_receiverId));
@@ -204,9 +236,15 @@ friends.get("/requests/pending", async (c) => {
   const userId = c.get("userId");
   const db = getDrizzle(c.env.DB);
   
+  const page = parseInt(c.req.query("page") || "1");
+  const limit = parseInt(c.req.query("limit") || "20");
+  const offset = (page - 1) * limit;
+
   const list = await db.query.friendRequest.findMany({
     where: and(eq(friendRequest.receiverId, userId as string), eq(friendRequest.status, "PENDING")),
-    with: { user_senderId: { columns: { id: true, firstName: true, lastName: true, username: true, avatarUrl: true } } }
+    with: { user_senderId: { columns: { id: true, firstName: true, lastName: true, username: true, avatarUrl: true } } },
+    limit,
+    offset
   });
   
   return c.json(list.map((r: any) => r.user_senderId));
