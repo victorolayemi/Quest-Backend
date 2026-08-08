@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm/relations";
-import { user, otpRequest, userFeeling, friendRequest, directChat, directMessage, chatPin, journalEntry, personalNote, post, community, postReaction, communityEvent, eventAttendee, groupMessage, bibleBookmark, bibleHighlight, bibleNote, bibleReadingHistory, devotionPlan, devotionDay, userPlanProgress, sermonMedia, playProgress, quiz, question, quizAttempt, dailyBread, dailyBreadAttempt, challenge, challengeParticipant, badge, earnedBadge, notification, loginHistory, gameScore, dailyVerseLike, bookComment, book, bookReaction, mediaLike, postReport, comment, commentReaction, chatClear, devotionDayLike, subscription, userMedia, communityJoinRequest, communityMember, communityMessage, communityMessageLike, communityMessageBookmark, communityMessageComment, savedBook, communityDailyVerse, communityDailyVerseLike, communityMessageReaction, communityMessageCommentLike, report, coinTransaction } from "./schema";
+import { user, otpRequest, userFeeling, friendRequest, directChat, directMessage, chatPin, journalEntry, personalNote, post, community, postReaction, postLike, communityEvent, eventAttendee, groupMessage, bibleBookmark, bibleHighlight, bibleNote, bibleReadingHistory, devotionPlan, devotionDay, userPlanProgress, sermonMedia, playProgress, quiz, question, quizAttempt, dailyBread, dailyBreadAttempt, challenge, challengeParticipant, badge, earnedBadge, notification, loginHistory, gameScore, dailyVerseLike, bookComment, book, bookReaction, bookLike, mediaLike, postReport, comment, commentReaction, chatClear, devotionDayLike, subscription, userMedia, communityJoinRequest, communityMember, communityMessage, communityMessageLike, communityMessageBookmark, communityMessageComment, savedBook, communityDailyVerse, communityDailyVerseLike, communityMessageReaction, communityMessageCommentLike, report, coinTransaction } from "./schema";
 
 export const otpRequestRelations = relations(otpRequest, ({one}) => ({
 	user: one(user, {
@@ -155,6 +155,7 @@ export const postRelations = relations(post, ({one, many}) => ({
 		references: [community.id]
 	}),
 	postReactions: many(postReaction),
+	postLikes: many(postLike),
 	postReports: many(postReport),
 	comments: many(comment),
 }));
@@ -180,6 +181,17 @@ export const postReactionRelations = relations(postReaction, ({one}) => ({
 	}),
 	post: one(post, {
 		fields: [postReaction.postId],
+		references: [post.id]
+	}),
+}));
+
+export const postLikeRelations = relations(postLike, ({one}) => ({
+	user: one(user, {
+		fields: [postLike.userId],
+		references: [user.id]
+	}),
+	post: one(post, {
+		fields: [postLike.postId],
 		references: [post.id]
 	}),
 }));
@@ -401,6 +413,7 @@ export const bookCommentRelations = relations(bookComment, ({one}) => ({
 export const bookRelations = relations(book, ({one, many}) => ({
 	bookComments: many(bookComment),
 	bookReactions: many(bookReaction),
+	bookLikes: many(bookLike),
 	savedBooks: many(savedBook),
 	user: one(user, {
 		fields: [book.authorId],
@@ -415,6 +428,17 @@ export const bookReactionRelations = relations(bookReaction, ({one}) => ({
 	}),
 	book: one(book, {
 		fields: [bookReaction.bookId],
+		references: [book.id]
+	}),
+}));
+
+export const bookLikeRelations = relations(bookLike, ({one}) => ({
+	user: one(user, {
+		fields: [bookLike.userId],
+		references: [user.id]
+	}),
+	book: one(book, {
+		fields: [bookLike.bookId],
 		references: [book.id]
 	}),
 }));

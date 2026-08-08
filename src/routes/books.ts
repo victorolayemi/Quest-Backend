@@ -7,7 +7,8 @@ import {
   user, 
   savedBook, 
   bookComment, 
-  bookReaction 
+  bookReaction,
+  bookLike
 } from '../db/schema';
 import { authMiddleware } from '../middleware/auth';
 import { adminAuthMiddleware } from '../middleware/adminAuth';
@@ -214,8 +215,11 @@ books.get("/:id", async (c) => {
   const isSaved = await db.query.savedBook.findFirst({
     where: and(eq(savedBook.userId, userId), eq(savedBook.bookId, bookId))
   });
+  const hasLiked = await db.query.bookLike.findFirst({
+    where: and(eq(bookLike.userId, userId), eq(bookLike.bookId, bookId))
+  });
   
-  return c.json({ ...bookObj, isSaved: !!isSaved });
+  return c.json({ ...bookObj, isSaved: !!isSaved, hasLiked: !!hasLiked });
 });
 
 books.get("/:id/comments", async (c) => {
@@ -311,6 +315,36 @@ books.post("/:id/react", async (c) => {
       emoji
     }).returning();
     return c.json({ message: "Reaction added", added: true, reaction }, 201);
+  }
+});
+
+books.post("/:id/like", async (c) => {
+  const db = getDrizzle(c.env.DB);
+  const bookId = c.req.param("id");
+  const userId = c.get("userId") as string;
+  
+  const existingLike = await db.query.bookLike.findFirst({
+    where: and(
+      eq(bookLike.bookId, bookId),
+      eq(bookLike.userId, userId)
+    )
+  });
+  
+  const b = await db.query.book.findFirst({ where: eq(book.id, bookId) });
+  if (!b) return c.json({ error: "Book not found" }, 404);
+  
+  if (existingLike) {
+    await db.delete(bookLike).where(eq(bookLike.id, existingLike.id));
+    await db.update(book).set({ likesCount: Math.max(0, b.likesCount - 1) }).where(eq(book.id, bookId));
+    return c.json({ message: "Like removed", liked: false });
+  } else {
+    const [likeObj] = await db.insert(bookLike).values({
+      id: crypto.randomUUID(),
+      bookId,
+      userId
+    }).returning();
+    await db.update(book).set({ likesCount: b.likesCount + 1 }).where(eq(book.id, bookId));
+    return c.json({ message: "Like added", liked: true, like: likeObj }, 201);
   }
 });
 

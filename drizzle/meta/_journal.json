@@ -8,6 +8,13 @@
       "when": 1786005580470,
       "tag": "0000_complex_zaladane",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1786219571262,
+      "tag": "0001_amazing_meltdown",
+      "breakpoints": true
     }
   ]
 }

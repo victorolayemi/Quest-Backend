@@ -48,7 +48,7 @@ app.post("/:id/join", async (c) => {
     });
     
     const notifyUserIds = new Set<string>();
-    if (com.ownerId) notifyUserIds.add(com.ownerId);
+    if (com.creatorId) notifyUserIds.add(com.creatorId);
     admins.forEach(a => notifyUserIds.add(a.userId));
     
     const requester = await db.query.user.findFirst({
@@ -57,13 +57,15 @@ app.post("/:id/join", async (c) => {
     const requesterName = requester ? `${requester.firstName || ''} ${requester.lastName || ''}`.trim() : 'Someone';
     const finalName = requesterName.length > 0 ? requesterName : 'Someone';
     
+    const fcm = new FCMService(c.env.FIREBASE_CLIENT_EMAIL, c.env.FIREBASE_PRIVATE_KEY);
     for (const adminUserId of notifyUserIds) {
       await dispatchNotification({
         db,
         userId: adminUserId,
-        title: "New Join Request",
+        title: "Join Request",
         message: `${finalName} requested to join ${com.name}`,
         type: "COMMUNITY_JOIN_REQUEST",
+        fcm,
         data: { communityId }
       });
     }

@@ -6,7 +6,7 @@ import { authMiddleware, checkCommunityRestriction } from '../../middleware/auth
 import { adminAuthMiddleware } from '../../middleware/adminAuth';
 import { FCMService } from '../../services/fcm';
 import { dispatchNotification } from '../../services/notificationService';
-import { post, communityMember, community, postReaction, comment, commentReaction, user, postReport } from '../../db/schema';
+import { post, communityMember, community, postReaction, postLike, comment, commentReaction, user, postReport } from '../../db/schema';
 import { eq, or, and, not, like, sql, inArray, desc, asc } from 'drizzle-orm';
 import crypto from 'crypto';
 
@@ -39,14 +39,18 @@ app.get("/posts/all", async (c) => {
     with: {
       user: { columns: { firstName: true, lastName: true, username: true, avatarUrl: true } },
       community: { columns: { name: true } },
-      postReactions: true
+      postReactions: true,
+      postLikes: true
     }
   });
 
   const posts = await Promise.all(postsData.map(async p => {
     const [cc] = await db.select({ count: sql<number>`count(*)` }).from(comment).where(eq(comment.postId, p.id));
+    const { postReactions, postLikes, ...rest } = p;
     return {
-      ...p,
+      ...rest,
+      reactions: postReactions,
+      postLikes,
       _count: { comments: Number(cc.count) }
     };
   }));
@@ -64,14 +68,18 @@ app.get("/posts/user/created", async (c) => {
     with: {
       user: { columns: { firstName: true, lastName: true, username: true, avatarUrl: true } },
       community: { columns: { name: true } },
-      postReactions: true
+      postReactions: true,
+      postLikes: true
     }
   });
 
   const posts = await Promise.all(postsData.map(async p => {
     const [cc] = await db.select({ count: sql<number>`count(*)` }).from(comment).where(eq(comment.postId, p.id));
+    const { postReactions, postLikes, ...rest } = p;
     return {
-      ...p,
+      ...rest,
+      reactions: postReactions,
+      postLikes,
       _count: { comments: Number(cc.count) }
     };
   }));
@@ -90,6 +98,7 @@ app.get("/posts/:postId", async (c) => {
       user: { columns: { id: true, firstName: true, lastName: true, username: true, avatarUrl: true } },
       community: { columns: { id: true, name: true } },
       postReactions: true,
+      postLikes: true,
     }
   });
   
@@ -119,14 +128,18 @@ app.get("/:id/posts", async (c) => {
     orderBy: [desc(post.createdAt)],
     with: {
       user: { columns: { firstName: true, lastName: true, username: true, avatarUrl: true } },
-      postReactions: true
+      postReactions: true,
+      postLikes: true
     }
   });
 
   const posts = await Promise.all(postsData.map(async p => {
     const [cc] = await db.select({ count: sql<number>`count(*)` }).from(comment).where(eq(comment.postId, p.id));
+    const { postReactions, postLikes, ...rest } = p;
     return {
-      ...p,
+      ...rest,
+      reactions: postReactions,
+      postLikes,
       _count: { comments: Number(cc.count) }
     };
   }));
@@ -143,6 +156,7 @@ app.get("/:id/posts/:postId", async (c) => {
     with: {
       user: { columns: { firstName: true, lastName: true, username: true, avatarUrl: true } },
       postReactions: true,
+      postLikes: true,
       comments: {
         with: {
           user: { columns: { username: true, avatarUrl: true } }
@@ -152,7 +166,8 @@ app.get("/:id/posts/:postId", async (c) => {
   });
   
   if (!postRes) return c.json({ error: "Post not found" }, 404);
-  return c.json(postRes);
+  const { postReactions, postLikes, ...rest } = postRes;
+  return c.json({ ...rest, reactions: postReactions, postLikes });
 });
 
 app.post("/posts", checkCommunityRestriction, async (c) => {
@@ -321,6 +336,49 @@ app.post("/posts/:id/react", async (c) => {
 
 app.post("/posts/:id/share", async (c) => {
   return c.json({ shareUrl: `https://quest-app.com/posts/${c.req.param("id")}` });
+});
+
+app.post("/posts/:id/like", async (c) => {
+  const userId = c.get("userId");
+  const postId = c.req.param("id");
+  const db = getDrizzle(c.env.DB);
+  
+  const existing = await db.query.postLike.findFirst({ where: and(eq(postLike.postId, postId), eq(postLike.userId, userId as string)) });
+  
+  const p = await db.query.post.findFirst({ where: eq(post.id, postId) });
+  if (!p) return c.json({ error: "Post not found" }, 404);
+  
+  if (existing) {
+    await db.delete(postLike).where(eq(postLike.id, existing.id));
+    await db.update(post).set({ likesCount: Math.max(0, p.likesCount - 1) }).where(eq(post.id, postId));
+    return c.json({ message: "Like removed", liked: false });
+  }
+  
+  const [like] = await db.insert(postLike).values({
+    id: crypto.randomUUID(),
+    postId,
+    userId,
+  }).returning();
+  
+  await db.update(post).set({ likesCount: p.likesCount + 1 }).where(eq(post.id, postId));
+  
+  const userRes = await db.query.user.findFirst({ where: eq(user.id, userId) });
+  
+  if (p.userId !== userId) {
+    const fcm = new FCMService(c.env.FIREBASE_CLIENT_EMAIL, c.env.FIREBASE_PRIVATE_KEY);
+    const likerName = userRes?.firstName || userRes?.username || "Someone";
+    await dispatchNotification({
+      db,
+      userId: p.userId,
+      title: "New Like",
+      message: `${likerName} liked your post.`,
+      type: "POST_REACTION",
+      pushSettingKey: "pushCommunityPosts",
+      fcm,
+      data: { type: "POST_REACTION", postId }
+    });
+  }
+  return c.json({ message: "Like added", liked: true, like: { ...like, user: userRes } });
 });
 
 app.get("/posts/:postId/comments", async (c) => {

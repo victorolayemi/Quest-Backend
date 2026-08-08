@@ -91,8 +91,19 @@ export const post = sqliteTable("Post", {
 	userId: text().notNull().references(() => user.id, { onDelete: "cascade", onUpdate: "cascade" } ),
 	text: text().notNull(),
 	image: text(),
+	likesCount: integer().default(0).notNull(),
 	createdAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
 });
+
+export const postLike = sqliteTable("PostLike", {
+	id: text().primaryKey().notNull(),
+	postId: text().notNull().references(() => post.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	userId: text().notNull().references(() => user.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	createdAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+},
+(table) => [
+	uniqueIndex("PostLike_postId_userId_key").on(table.postId, table.userId),
+]);
 
 export const postReaction = sqliteTable("PostReaction", {
 	id: text().primaryKey().notNull(),
@@ -243,6 +254,18 @@ export const dailyBreadAttempt = sqliteTable("DailyBreadAttempt", {
 	streakAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
 	createdAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
 });
+
+
+
+export const bookLike = sqliteTable("BookLike", {
+	id: text().primaryKey().notNull(),
+	bookId: text().notNull().references(() => book.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	userId: text().notNull().references(() => user.id, { onDelete: "cascade", onUpdate: "cascade" } ),
+	createdAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+},
+(table) => [
+	uniqueIndex("BookLike_bookId_userId_key").on(table.bookId, table.userId),
+]);
 
 export const challenge = sqliteTable("Challenge", {
 	id: text().primaryKey().notNull(),
@@ -461,6 +484,8 @@ export const sermonMedia = sqliteTable("SermonMedia", {
 	category: text().notNull(),
 	createdAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
 });
+
+
 
 export const chatClear = sqliteTable("ChatClear", {
 	id: text().primaryKey().notNull(),
@@ -719,6 +744,7 @@ export const book = sqliteTable("Book", {
 	status: text().default("APPROVED").notNull(),
 	authorId: text().references(() => user.id, { onDelete: "set null", onUpdate: "cascade" } ),
 	originalId: text(),
+	likesCount: integer().default(0).notNull(),
 });
 
 export const devotionPlan = sqliteTable("DevotionPlan", {
