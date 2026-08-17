@@ -1,63 +1,77 @@
+import { Hono } from "hono";
+import { getDrizzle } from "../utils/drizzle";
+import { eq, or, and, sql, desc, gte } from "drizzle-orm";
+import {
+  community,
+  devotionPlan,
+  sermonMedia,
+  userMedia,
+  journalEntry,
+  userFeeling,
+  affirmation,
+  post,
+  communityEvent,
+} from "../db/schema";
+import { authMiddleware } from "../middleware/auth";
+import { adminAuthMiddleware } from "../middleware/adminAuth";
+import { Bindings, Variables } from "../types";
 
-import { Hono } from 'hono';
-import { getDrizzle } from '../utils/drizzle';
-import { eq, or, and, sql, desc, gte } from 'drizzle-orm';
-import { community, devotionPlan, sermonMedia, userMedia, journalEntry, userFeeling, affirmation, post, communityEvent } from '../db/schema';
-import { authMiddleware } from '../middleware/auth';
-import { adminAuthMiddleware } from '../middleware/adminAuth';
-import { Bindings, Variables } from '../types';
-
-var feed = new Hono<{Bindings: Bindings, Variables: Variables}>();
+var feed = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 feed.use("*", authMiddleware);
 
 feed.get("/", async (c) => {
   const userId = c.get("userId") as string;
   const db = getDrizzle(c.env.DB);
-  
+
   const communities2 = await db.query.community.findMany({
     limit: 10,
     with: {
       communityMembers: { columns: { id: true } },
-      posts: { columns: { id: true } }
+      posts: { columns: { id: true } },
+      user: { columns: { firstName: true, lastName: true, username: true } },
     },
-    orderBy: [desc(community.createdAt)]
+    orderBy: [desc(community.createdAt)],
   });
-  
+
   const devotions2 = await db.query.devotionPlan.findMany({
     limit: 2,
-    with: { devotionDays: true }
+    with: { devotionDays: true },
   });
-  
+
   const videoItems = await db.query.sermonMedia.findMany({
     where: eq(sermonMedia.type, "VIDEO"),
     with: { mediaLikes: { columns: { id: true } } },
     orderBy: [desc(sermonMedia.createdAt)],
-    limit: 4
+    limit: 4,
   });
-  
+
   const uVideoItems = await db.query.userMedia.findMany({
     where: eq(userMedia.type, "video"),
     with: { user: { columns: { firstName: true, lastName: true } } },
     orderBy: [desc(userMedia.createdAt)],
-    limit: 4
+    limit: 4,
   });
-  
+
   const audioItems = await db.query.sermonMedia.findMany({
     where: eq(sermonMedia.type, "AUDIO"),
     with: { mediaLikes: { columns: { id: true } } },
     orderBy: [desc(sermonMedia.createdAt)],
-    limit: 4
+    limit: 4,
   });
-  
+
   const uAudioItems = await db.query.userMedia.findMany({
     where: eq(userMedia.type, "audio"),
     with: { user: { columns: { firstName: true, lastName: true } } },
     orderBy: [desc(userMedia.createdAt)],
-    limit: 4
+    limit: 4,
   });
-  
+
   let mediaItems = [
-    ...videoItems.map((item: any) => ({ ...item, likes: item.mediaLikes.length, createdAt: item.createdAt })),
+    ...videoItems.map((item: any) => ({
+      ...item,
+      likes: item.mediaLikes.length,
+      createdAt: item.createdAt,
+    })),
     ...uVideoItems.map((item: any) => ({
       id: item.id,
       title: item.title,
@@ -68,9 +82,13 @@ feed.get("/", async (c) => {
       duration: "00:00",
       category: "Reel",
       likes: 0,
-      createdAt: item.createdAt
+      createdAt: item.createdAt,
     })),
-    ...audioItems.map((item: any) => ({ ...item, likes: item.mediaLikes.length, createdAt: item.createdAt })),
+    ...audioItems.map((item: any) => ({
+      ...item,
+      likes: item.mediaLikes.length,
+      createdAt: item.createdAt,
+    })),
     ...uAudioItems.map((item: any) => ({
       id: item.id,
       title: item.title,
@@ -81,70 +99,82 @@ feed.get("/", async (c) => {
       duration: "00:00",
       category: "Reel",
       likes: 0,
-      createdAt: item.createdAt
-    }))
+      createdAt: item.createdAt,
+    })),
   ];
-  
-  mediaItems.sort((a, b) => new Date(b.createdAt as string).getTime() - new Date(a.createdAt as string).getTime());
-  
+
+  mediaItems.sort(
+    (a, b) =>
+      new Date(b.createdAt as string).getTime() -
+      new Date(a.createdAt as string).getTime(),
+  );
+
   const latestJournal = await db.query.journalEntry.findFirst({
     where: eq(journalEntry.userId, userId),
-    orderBy: [desc(journalEntry.createdAt)]
+    orderBy: [desc(journalEntry.createdAt)],
   });
-  
+
   const feelingRecord = await db.query.userFeeling.findFirst({
-    where: eq(userFeeling.userId, userId)
+    where: eq(userFeeling.userId, userId),
   });
   const feeling = feelingRecord ? feelingRecord.feeling : null;
-  
+
   let affirmations: any[] = [];
   if (feeling) {
     affirmations = await db.query.affirmation.findMany({
-      where: eq(affirmation.feeling, feeling)
+      where: eq(affirmation.feeling, feeling),
     });
   }
-  
+
   if (affirmations.length === 0) {
     affirmations = await db.query.affirmation.findMany({
-      where: sql`${affirmation.feeling} IS NULL`
+      where: sql`${affirmation.feeling} IS NULL`,
     });
   }
-  
+
   let affirmationText = "God loves me, and I know it";
   if (affirmations.length > 0) {
     const idx = Math.floor(Math.random() * affirmations.length);
     affirmationText = affirmations[idx].text;
   }
-  
+
   const communitiesWithCount = communities2.map((c: any) => ({
     ...c,
+    authorName: c.user
+      ? `${c.user.firstName || ""} ${c.user.lastName || ""}`.trim() ||
+        c.user.username ||
+        "Sozo"
+      : "Sozo",
     _count: {
       members: c.communityMembers.length,
-      posts: c.posts.length
-    }
+      posts: c.posts.length,
+    },
   }));
-  
+
   return c.json({
     communities: communitiesWithCount,
     recommendedDevotions: devotions2,
     recommendedMedia: mediaItems,
     latestJournal,
-    affirmation: affirmationText
+    affirmation: affirmationText,
   });
 });
 
 feed.get("/explore", async (c) => {
   const db = getDrizzle(c.env.DB);
-  
+
   const activePlans = await db.query.devotionPlan.findMany({
-    limit: 4
+    limit: 4,
   });
-  
+
   const popularCommunities = await db.query.community.findMany({
     limit: 5,
-    with: { communityMembers: { columns: { id: true } } }
+    with: {
+      communityMembers: { columns: { id: true } },
+      user: { columns: { firstName: true, lastName: true, username: true } },
+    },
   });
-  
+
   // Drizzle doesn't support ordering by relation length directly in query builder without complex sql.
   // Given limit is small, we can fetch more and sort, or we can use subqueries.
   // Easiest is just to fetch recent ones and sort by likes locally since it's just explore feed.
@@ -152,20 +182,24 @@ feed.get("/explore", async (c) => {
     where: eq(sermonMedia.type, "VIDEO"),
     with: { mediaLikes: { columns: { id: true } } },
     orderBy: [desc(sermonMedia.createdAt)],
-    limit: 20
+    limit: 20,
   });
-  trendingVideos.sort((a: any, b: any) => b.mediaLikes.length - a.mediaLikes.length);
+  trendingVideos.sort(
+    (a: any, b: any) => b.mediaLikes.length - a.mediaLikes.length,
+  );
   const topVideos = trendingVideos.slice(0, 4);
-  
+
   const trendingAudios = await db.query.sermonMedia.findMany({
     where: eq(sermonMedia.type, "AUDIO"),
     with: { mediaLikes: { columns: { id: true } } },
     orderBy: [desc(sermonMedia.createdAt)],
-    limit: 20
+    limit: 20,
   });
-  trendingAudios.sort((a: any, b: any) => b.mediaLikes.length - a.mediaLikes.length);
+  trendingAudios.sort(
+    (a: any, b: any) => b.mediaLikes.length - a.mediaLikes.length,
+  );
   const topAudios = trendingAudios.slice(0, 4);
-  
+
   const recentPosts = await db.query.post.findMany({
     limit: 4,
     with: {
@@ -173,15 +207,15 @@ feed.get("/explore", async (c) => {
         columns: {
           firstName: true,
           username: true,
-          avatarUrl: true
-        }
+          avatarUrl: true,
+        },
       },
       postReactions: true,
-      community: true
+      community: true,
     },
-    orderBy: [desc(post.createdAt)]
+    orderBy: [desc(post.createdAt)],
   });
-  
+
   const todayStr = new Date().toISOString();
   const upcomingEvents = await db.query.communityEvent.findMany({
     limit: 4,
@@ -191,33 +225,38 @@ feed.get("/explore", async (c) => {
       community: {
         columns: {
           name: true,
-          image: true
-        }
+          image: true,
+        },
       },
       eventAttendees: {
         columns: {
-          userId: true
-        }
-      }
-    }
+          userId: true,
+        },
+      },
+    },
   });
-  
+
   const communitiesWithCount = popularCommunities.map((c: any) => ({
     ...c,
+    authorName: c.user
+      ? `${c.user.firstName || ""} ${c.user.lastName || ""}`.trim() ||
+        c.user.username ||
+        "Sozo"
+      : "Sozo",
     _count: {
-      members: c.communityMembers.length
-    }
+      members: c.communityMembers.length,
+    },
   }));
-  
+
   // Aligning frontend keys: posts has reactions mapped to reactions
   const mappedPosts = recentPosts.map((p: any) => ({
     ...p,
-    reactions: p.postReactions
+    reactions: p.postReactions,
   }));
 
   const mappedEvents = upcomingEvents.map((e: any) => ({
     ...e,
-    attendees: e.eventAttendees
+    attendees: e.eventAttendees,
   }));
 
   return c.json({
@@ -226,7 +265,7 @@ feed.get("/explore", async (c) => {
     videos: topVideos.map((v: any) => ({ ...v, likes: v.mediaLikes.length })),
     audios: topAudios.map((a: any) => ({ ...a, likes: a.mediaLikes.length })),
     posts: mappedPosts,
-    events: mappedEvents
+    events: mappedEvents,
   });
 });
 
