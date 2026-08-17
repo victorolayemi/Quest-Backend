@@ -143,6 +143,15 @@ chats.post("/:chatId/messages", async (c) => {
   const { text, image } = body;
   const db = getDrizzle(c.env.DB);
   
+  const chat = await db.query.directChat.findFirst({
+    where: (c, { eq }) => eq(c.id, chatId),
+    columns: { user1Id: true, user2Id: true }
+  });
+
+  if (!chat || (chat.user1Id !== senderId && chat.user2Id !== senderId)) {
+    return c.json({ error: "Chat not found or forbidden" }, 403);
+  }
+
   const newMsgId = crypto.randomUUID();
   await db.insert(directMessage).values({
     id: newMsgId,
@@ -157,11 +166,6 @@ chats.post("/:chatId/messages", async (c) => {
     with: {
       user: { columns: { id: true, username: true, avatarUrl: true } }
     }
-  });
-
-  const chat = await db.query.directChat.findFirst({
-    where: (c, { eq }) => eq(c.id, chatId),
-    columns: { user1Id: true, user2Id: true }
   });
 
   if (chat) {

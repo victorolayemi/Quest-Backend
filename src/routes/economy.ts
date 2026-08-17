@@ -136,6 +136,9 @@ economy.post("/purchase/:packageId", async (c) => {
   const userId = c.get("userId");
   const packageId = c.req.param("packageId");
   const db = getDrizzle(c.env.DB);
+
+  const u = await db.query.user.findFirst({ where: (users, { eq }) => eq(users.id, userId) });
+  if (!u?.isAdmin) return c.json({ error: "Forbidden: Admins only" }, 403);
   
   const pkg = await db.query.coinPackage.findFirst({ where: (pkgs, { eq }) => eq(pkgs.id, packageId) });
   if (!pkg) return c.json({ error: "Package not found" }, 404);

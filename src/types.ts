@@ -10,6 +10,9 @@ export type Bindings = {
   TWILIO_AUTH_TOKEN: string;
   TWILIO_PHONE_NUMBER: string;
   NOTIFICATION_QUEUE: Queue;
+  APPLE_SHARED_SECRET?: string;
+  GOOGLE_SERVICE_ACCOUNT_JSON?: string;
+  ANDROID_PACKAGE_NAME?: string;
 };
 
 export type Variables = {

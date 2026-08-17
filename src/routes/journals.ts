@@ -179,7 +179,12 @@ journals.post("/:id/merge", async (c) => {
   }).where(eq(journalEntry.id, id)).returning();
   
   if (mergeIds.length > 0) {
-    await db.delete(journalEntry).where(inArray(journalEntry.id, mergeIds));
+    await db.delete(journalEntry).where(
+      and(
+        inArray(journalEntry.id, mergeIds),
+        eq(journalEntry.userId, userId as string)
+      )
+    );
   }
   
   return c.json(updated);
