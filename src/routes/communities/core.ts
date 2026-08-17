@@ -3,7 +3,7 @@ import { getDrizzle } from '../../utils/drizzle';
 import { Bindings, Variables } from '../../types';
 import { checkAndDeductCoins } from '../../utils/economy';
 import { authMiddleware, checkCommunityRestriction } from '../../middleware/auth';
-import { community, communityMember, communityJoinRequest } from '../../db/schema';
+import { community, communityMember, communityJoinRequest, user } from '../../db/schema';
 import { eq, or, and, not, like, sql, inArray } from 'drizzle-orm';
 import crypto from 'crypto';
 
@@ -59,8 +59,18 @@ app.get("/", async (c) => {
   
   const list = await Promise.all(listData.map(async (l) => {
     const [mc] = await db.select({ count: sql<number>`count(*)` }).from(communityMember).where(eq(communityMember.communityId, l.id));
+    
+    let authorName = "Unknown Author";
+    if (l.creatorId) {
+      const [creator] = await db.select({ firstName: user.firstName, lastName: user.lastName, username: user.username }).from(user).where(eq(user.id, l.creatorId));
+      if (creator) {
+        authorName = `${creator.firstName || ''} ${creator.lastName || ''}`.trim() || creator.username || "Unknown Author";
+      }
+    }
+
     return {
       ...l,
+      authorName,
       _count: { members: Number(mc.count) }
     };
   }));
@@ -87,8 +97,18 @@ app.get("/search", async (c) => {
   
   const list = await Promise.all(listData.map(async (l) => {
     const [mc] = await db.select({ count: sql<number>`count(*)` }).from(communityMember).where(eq(communityMember.communityId, l.id));
+    
+    let authorName = "Unknown Author";
+    if (l.creatorId) {
+      const [creator] = await db.select({ firstName: user.firstName, lastName: user.lastName, username: user.username }).from(user).where(eq(user.id, l.creatorId));
+      if (creator) {
+        authorName = `${creator.firstName || ''} ${creator.lastName || ''}`.trim() || creator.username || "Unknown Author";
+      }
+    }
+
     return {
       ...l,
+      authorName,
       _count: { members: Number(mc.count) }
     };
   }));
@@ -124,8 +144,18 @@ app.get("/recommended", async (c) => {
   
   const listWithCounts = await Promise.all(list.map(async (l) => {
     const [mc] = await db.select({ count: sql<number>`count(*)` }).from(communityMember).where(eq(communityMember.communityId, l.id));
+    
+    let authorName = "Unknown Author";
+    if (l.creatorId) {
+      const [creator] = await db.select({ firstName: user.firstName, lastName: user.lastName, username: user.username }).from(user).where(eq(user.id, l.creatorId));
+      if (creator) {
+        authorName = `${creator.firstName || ''} ${creator.lastName || ''}`.trim() || creator.username || "Unknown Author";
+      }
+    }
+
     return {
       ...l,
+      authorName,
       _count: { members: Number(mc.count) }
     };
   }));
@@ -200,8 +230,17 @@ app.get("/:id", async (c) => {
     hasPendingRequest = existingReqs.length > 0;
   }
 
+  let authorName = "Unknown Author";
+  if (com.creatorId) {
+    const [creator] = await db.select({ firstName: user.firstName, lastName: user.lastName, username: user.username }).from(user).where(eq(user.id, com.creatorId));
+    if (creator) {
+      authorName = `${creator.firstName || ''} ${creator.lastName || ''}`.trim() || creator.username || "Unknown Author";
+    }
+  }
+
   return c.json({
     ...com,
+    authorName,
     isPrivate: Boolean(com.isPrivate),
     isForumDisabledGlobally: Boolean(com.isForumDisabledGlobally),
     _count: { members: Number(mc.count) },
