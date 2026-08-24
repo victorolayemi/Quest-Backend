@@ -65,6 +65,24 @@ journals.post("/", async (c) => {
     return c.json({ error: economyCheck.message || "Insufficient coins or limit reached" }, 403);
   }
 
+  // Check if a journal was already created today
+  const recentJournal = await db.query.journalEntry.findFirst({
+    where: eq(journalEntry.userId, userId as string),
+    orderBy: [desc(journalEntry.createdAt)]
+  });
+  
+  if (recentJournal && recentJournal.createdAt) {
+    const rawDate = recentJournal.createdAt as string | number;
+    const dateNum = Number(rawDate);
+    const journalDate = new Date(
+      !isNaN(dateNum) ? dateNum : (String(rawDate).includes('T') ? rawDate : String(rawDate) + "Z")
+    );
+    const today = new Date();
+    if (journalDate.toDateString() === today.toDateString()) {
+      return c.json({ error: "You can only create one journal entry per day. You can still edit your existing entry today." }, 403);
+    }
+  }
+
   const [newJournal] = await db.insert(journalEntry).values({
     id: crypto.randomUUID(),
     userId: userId as string,

@@ -15,6 +15,13 @@
       "when": 1786219571262,
       "tag": "0001_amazing_meltdown",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1787572729379,
+      "tag": "0002_abandoned_nehzno",
+      "breakpoints": true
     }
   ]
 }

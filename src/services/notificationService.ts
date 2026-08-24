@@ -60,13 +60,15 @@ export async function dispatchNotification({
     if (!user || !user.allNotifications) return;
 
     if (user.inAppNotifications && logInDb) {
+      const dataStr = data ? JSON.stringify(data) : null;
       if (db) {
         await db.insert(notificationTable).values({
           id: crypto.randomUUID(),
           userId,
           title,
           message: message2,
-          type
+          type,
+          data: dataStr
         });
       } else {
         await prisma.notification.create({
@@ -74,7 +76,8 @@ export async function dispatchNotification({
             userId,
             title,
             message: message2,
-            type
+            type,
+            data: dataStr
           }
         });
       }

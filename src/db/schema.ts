@@ -315,6 +315,7 @@ export const notification = sqliteTable("Notification", {
 	message: text().notNull(),
 	type: text().default("SYSTEM").notNull(),
 	isRead: integer({ mode: 'boolean' }).default(false).notNull(),
+	data: text(),
 	createdAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
 });
 

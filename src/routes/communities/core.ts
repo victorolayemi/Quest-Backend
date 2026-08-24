@@ -287,6 +287,67 @@ app.post("/", checkCommunityRestriction, async (c) => {
   }
 });
 
+app.put("/:id", async (c) => {
+  const id = c.req.param("id");
+  const userId = c.get("userId");
+  const db = getDrizzle(c.env.DB);
+
+  const body = (await c.req.json()) as any;
+  const {
+    name: name2,
+    description,
+    image,
+    avatarUrl,
+    guidelines,
+    isPrivate,
+  } = body;
+
+  const membershipList = await db
+    .select()
+    .from(communityMember)
+    .where(
+      and(
+        eq(communityMember.communityId, id),
+        eq(communityMember.userId, userId),
+      ),
+    );
+  const membership = membershipList[0];
+
+  const comList = await db
+    .select()
+    .from(community)
+    .where(eq(community.id, id));
+  const com = comList[0];
+
+  if (!com) return c.json({ error: "Community not found" }, 404);
+
+  if (
+    com.creatorId !== userId &&
+    (!membership || membership.role !== "ADMIN")
+  ) {
+    return c.json({ error: "Forbidden: Not an admin" }, 403);
+  }
+
+  try {
+    const [updatedCom] = await db
+      .update(community)
+      .set({
+        name: name2 !== undefined ? name2 : com.name,
+        description: description !== undefined ? description : com.description,
+        image: avatarUrl !== undefined ? avatarUrl : (image !== undefined ? image : com.image),
+        guidelines: guidelines !== undefined ? guidelines : com.guidelines,
+        isPrivate: isPrivate !== undefined ? !!isPrivate : com.isPrivate,
+      })
+      .where(eq(community.id, id))
+      .returning();
+
+    return c.json(updatedCom, 200);
+  } catch (error) {
+    console.error("Update community error:", error);
+    return c.json({ error: "Failed to update community" }, 500);
+  }
+});
+
 app.get("/:id", async (c) => {
   const id = c.req.param("id");
   const userId = c.get("userId");

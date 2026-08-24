@@ -59,6 +59,12 @@ chats.get("/", async (c) => {
       unreadCount
     };
   }));
+  list.sort((a, b) => {
+    const aTime = a.lastMessage?.createdAt ? new Date(a.lastMessage.createdAt).getTime() : 0;
+    const bTime = b.lastMessage?.createdAt ? new Date(b.lastMessage.createdAt).getTime() : 0;
+    return bTime - aTime;
+  });
+
   return c.json(list);
 });
 
