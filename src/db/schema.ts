@@ -835,3 +835,11 @@ export const globalSettings = sqliteTable("GlobalSettings", {
 	updatedAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
 });
 
+export const feedback = sqliteTable("Feedback", {
+	id: text().primaryKey().notNull(),
+	userId: text().notNull().references(() => user.id, { onDelete: "cascade" }),
+	type: text().notNull(), // 'BUG', 'FEATURE_REQUEST', 'IMPROVEMENT', 'OTHER'
+	content: text().notNull(),
+	status: text().default("PENDING").notNull(),
+	createdAt: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+});

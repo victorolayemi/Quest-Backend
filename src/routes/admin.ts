@@ -6,7 +6,7 @@ import { getDrizzle } from '../utils/drizzle';
 import { eq, desc, count, countDistinct, gte } from 'drizzle-orm';
 import { 
   user, adminAuditLog, appFeature, notification, 
-  community, post, subscription, report 
+  community, post, subscription, report, feedback
 } from '../db/schema';
 import { authMiddleware } from '../middleware/auth';
 import { adminAuthMiddleware } from '../middleware/adminAuth';
@@ -463,6 +463,53 @@ admin.get("/subscriptions", async (c) => {
     });
   } catch (error: any) {
     return c.json({ error: "Failed to fetch subscriptions" }, 500);
+  }
+});
+
+admin.get("/feedback", async (c) => {
+  const db = getDrizzle(c.env);
+  try {
+    const feedbacks = await db
+      .select({
+        id: feedback.id,
+        userId: feedback.userId,
+        type: feedback.type,
+        content: feedback.content,
+        status: feedback.status,
+        createdAt: feedback.createdAt,
+        user: {
+          id: user.id,
+          username: user.username,
+          avatarUrl: user.avatarUrl,
+        }
+      })
+      .from(feedback)
+      .leftJoin(user, eq(feedback.userId, user.id))
+      .orderBy(desc(feedback.createdAt));
+
+    return c.json({ feedbacks });
+  } catch (error: any) {
+    console.error("Failed to fetch feedback:", error);
+    return c.json({ error: "Failed to fetch feedback" }, 500);
+  }
+});
+
+admin.put("/feedback/:id/status", async (c) => {
+  const db = getDrizzle(c.env);
+  const feedbackId = c.req.param("id");
+  try {
+    const { status } = await c.req.json();
+    if (!status) return c.json({ error: "Status is required" }, 400);
+
+    const result = await db.update(feedback)
+      .set({ status })
+      .where(eq(feedback.id, feedbackId))
+      .returning();
+
+    return c.json({ feedback: result[0] });
+  } catch (error: any) {
+    console.error("Failed to update feedback status:", error);
+    return c.json({ error: "Failed to update feedback status" }, 500);
   }
 });
 
